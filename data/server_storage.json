@@ -1,0 +1,106 @@
+{
+  "users": [
+    {
+      "id": "user-admin-main",
+      "name": "System Admin",
+      "email": "aivirtualcare@gmail.com",
+      "phone": "+1 (555) 019-2835",
+      "role": "admin",
+      "status": "active",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80",
+      "createdAt": "2026-01-10T08:00:00Z"
+    }
+  ],
+  "appointments": [],
+  "prescriptions": [],
+  "iotReadings": [],
+  "driverReadings": [],
+  "emergencyAlerts": [],
+  "doctorLeaveRequests": [],
+  "doctorTransferRequests": [],
+  "patientDoctorRequests": [],
+  "scheduledSurgeries": [],
+  "sentEmails": [],
+  "healthcareItems": [
+    {
+      "id": "kit-1",
+      "name": "Smart CardioKit Pro v3",
+      "category": "Patient IoT Kit",
+      "modelNumber": "SCK-300-MED",
+      "firmwareVersion": "v2.8.4",
+      "supportedSensors": [
+        "ECG/Heart Rate",
+        "Dual-cuff Blood Pressure",
+        "High-res SpO2",
+        "Infrared Core Temp",
+        "Blood Glucose"
+      ],
+      "price": 189,
+      "stock": 45,
+      "description": "Complete morning routine kit equipped with clinical Bluetooth 5.3 telemetry, auto-syncing vitals directly to Gemini AI risk engine.",
+      "status": "available",
+      "imageUrl": "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=400&q=80",
+      "createdAt": "2026-01-20T10:00:00Z"
+    },
+    {
+      "id": "kit-2",
+      "name": "Driver VitalGuard Safety Pod",
+      "category": "Driver Safety Kit",
+      "modelNumber": "DVG-800-IOT",
+      "firmwareVersion": "v3.1.2",
+      "supportedSensors": [
+        "Optical Heart Rate Band",
+        "Heart Rate Variability (HRV)",
+        "Infrared Blink & PERCLOS Camera",
+        "Steering Gyro Sensor"
+      ],
+      "price": 249,
+      "stock": 28,
+      "description": "Vehicle-grade IoT accident prevention system detecting driver drowsiness, microsleep, cardiac distress, and high stress with early alerts.",
+      "status": "available",
+      "imageUrl": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=400&q=80",
+      "createdAt": "2026-02-15T11:00:00Z"
+    },
+    {
+      "id": "kit-3",
+      "name": "Morning Health Pod Mini",
+      "category": "Patient IoT Kit",
+      "modelNumber": "MHP-100-LITE",
+      "firmwareVersion": "v1.4.0",
+      "supportedSensors": [
+        "Heart Rate",
+        "Pulse Oximetry SpO2",
+        "Skin Temperature",
+        "Weight Scale Link"
+      ],
+      "price": 119,
+      "stock": 60,
+      "description": "Compact bedside health check pod designed for quick 2-minute morning check-ins with voice guidance and real-time app upload.",
+      "status": "available",
+      "imageUrl": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=400&q=80",
+      "createdAt": "2026-03-05T09:00:00Z"
+    },
+    {
+      "id": "kit-4",
+      "name": "Emergency First-Responder Telekit",
+      "category": "Emergency Telekit",
+      "modelNumber": "EFR-9000-X",
+      "firmwareVersion": "v4.0.1",
+      "supportedSensors": [
+        "12-Lead ECG Simulator",
+        "Continuous Defib Vitals",
+        "Real-time GPS & 5G Telemetry",
+        "Automatic Oxygen Saturation"
+      ],
+      "price": 699,
+      "stock": 12,
+      "description": "Hospital-grade mobile telekit for emergency ambulances and high-risk patients with instant direct feed to the hospital ER team.",
+      "status": "available",
+      "imageUrl": "https://images.unsplash.com/photo-1583912267550-d44d9c9b58f8?auto=format&fit=crop&w=400&q=80",
+      "createdAt": "2026-03-20T14:00:00Z"
+    }
+  ],
+  "kitPayments": [],
+  "labTestOrders": [],
+  "lastSaved": "2026-10-16T14:13:55.722Z"
+}
