@@ -445,16 +445,33 @@ let kitPayments: KitPaymentOrder[] = [];
 // PERSISTENT DATA STORAGE (SURVIVES SERVER RESTARTS & COMPILATIONS)
 // ==========================================
 const STORAGE_FILE = path.resolve(__dirname, 'data', 'server_storage.json');
+const STORAGE_BACKUP_FILE = path.resolve(__dirname, 'data', 'server_storage.backup.json');
 
 function loadStorageFromDisk() {
   try {
+    let raw = '';
     if (fs.existsSync(STORAGE_FILE)) {
-      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+    } else if (fs.existsSync(STORAGE_BACKUP_FILE)) {
+      raw = fs.readFileSync(STORAGE_BACKUP_FILE, 'utf-8');
+    }
+
+    if (raw && raw.trim().length > 0) {
       const data = JSON.parse(raw);
       if (Array.isArray(data.users) && data.users.length > 0) {
         // User Requirement: NEVER remove data used for testing or registered by the user!
-        const hasAdmin = data.users.some((u: User) => u.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
-        users = hasAdmin ? data.users : [defaultAdminUser, ...data.users];
+        const userMap = new Map<string, User>();
+        // Add default admin first
+        userMap.set(defaultAdminUser.email.toLowerCase(), defaultAdminUser);
+        userMap.set(defaultAdminUser.id, defaultAdminUser);
+
+        // Add all loaded users from storage
+        data.users.forEach((u: User) => {
+          if (u.id) userMap.set(u.id, u);
+          if (u.email) userMap.set(u.email.toLowerCase(), u);
+        });
+
+        users = Array.from(new Set(userMap.values()));
       }
       if (Array.isArray(data.appointments)) appointments = data.appointments;
       if (Array.isArray(data.prescriptions)) prescriptions = data.prescriptions;
@@ -470,6 +487,33 @@ function loadStorageFromDisk() {
       if (Array.isArray(data.kitPayments)) kitPayments = data.kitPayments;
       if (Array.isArray(data.labTestOrders)) labTestOrders = data.labTestOrders;
 
+      // Restore credentials store from file
+      if (Array.isArray(data.credentials)) {
+        data.credentials.forEach(([email, cred]: [string, any]) => {
+          if (email && cred) {
+            credentialStore.set(email.toLowerCase(), cred);
+          }
+        });
+      }
+
+      // If user has passwordHash but credentialStore lacks it, restore
+      users.forEach((u) => {
+        if (u.email && u.passwordHash && !credentialStore.has(u.email.toLowerCase())) {
+          credentialStore.set(u.email.toLowerCase(), { salt: '', hash: '', combined: u.passwordHash });
+        }
+      });
+
+      // Ensure at least demo hospitals exist so newly registering doctors can pick a hospital
+      const existingHospitals = users.filter((u) => u.role === 'hospital');
+      if (existingHospitals.length === 0) {
+        const demo = getDemoSeedData();
+        demo.users.filter(u => u.role === 'hospital').forEach(h => {
+          if (!users.some(existing => existing.id === h.id || existing.email.toLowerCase() === h.email.toLowerCase())) {
+            users.push(h);
+          }
+        });
+      }
+
       // Hydrate hospital availableLabTests if missing
       users.forEach((u) => {
         if (u.role === 'hospital' && u.hospitalProfile) {
@@ -480,9 +524,29 @@ function loadStorageFromDisk() {
       });
 
       console.log(`[Storage] Loaded ${users.length} users (${users.filter(u => u.role === 'hospital').length} hospitals, ${users.filter(u => u.role === 'doctor').length} doctors, ${users.filter(u => u.role === 'patient').length} patients) from disk.`);
+      // Immediately commit loaded state to ensure backup and disk synchronization
+      saveStorageToDisk();
+    } else {
+      // If storage file does not exist yet, seed initial demo hospitals and save immediately
+      const demo = getDemoSeedData();
+      users = [defaultAdminUser, ...demo.users];
+      saveStorageToDisk();
     }
   } catch (err) {
     console.warn('[Storage] Error loading storage:', err);
+    // Attempt fallback to backup file if available
+    try {
+      if (fs.existsSync(STORAGE_BACKUP_FILE)) {
+        const backupRaw = fs.readFileSync(STORAGE_BACKUP_FILE, 'utf-8');
+        const backupData = JSON.parse(backupRaw);
+        if (Array.isArray(backupData.users) && backupData.users.length > 0) {
+          users = backupData.users;
+          console.log(`[Storage] Restored ${users.length} users from backup file.`);
+        }
+      }
+    } catch (bErr) {
+      console.warn('[Storage] Backup restore notice:', bErr);
+    }
   }
 }
 
@@ -492,6 +556,27 @@ function saveStorageToDisk() {
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
+
+    // Safety Guard: Merge disk users with in-memory users so no registered or test user is EVER deleted or dropped!
+    if (fs.existsSync(STORAGE_FILE)) {
+      try {
+        const existingRaw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+        const existingData = JSON.parse(existingRaw);
+        if (Array.isArray(existingData.users)) {
+          const userMap = new Map<string, User>();
+          existingData.users.forEach((u: User) => {
+            const key = (u.id || u.email || '').toLowerCase().trim();
+            if (key) userMap.set(key, u);
+          });
+          users.forEach((u: User) => {
+            const key = (u.id || u.email || '').toLowerCase().trim();
+            if (key) userMap.set(key, u);
+          });
+          users = Array.from(userMap.values());
+        }
+      } catch {}
+    }
+
     const data = {
       users,
       appointments,
@@ -507,9 +592,14 @@ function saveStorageToDisk() {
       healthcareItems,
       kitPayments,
       labTestOrders,
+      credentials: Array.from(credentialStore.entries()),
       lastSaved: new Date().toISOString()
     };
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    const jsonStr = JSON.stringify(data, null, 2);
+    // Write primary storage file
+    fs.writeFileSync(STORAGE_FILE, jsonStr, 'utf-8');
+    // Also maintain redundant backup file
+    fs.writeFileSync(STORAGE_BACKUP_FILE, jsonStr, 'utf-8');
   } catch (err) {
     console.warn('[Storage] Error saving storage:', err);
   }
@@ -1211,8 +1301,8 @@ app.post('/api/auth/register', (req, res) => {
     const cleanHprId = (doctorData?.hprId || '').trim();
     const isAbdm = Boolean(cleanHprId && cleanHprId.replace(/\D/g, '').length >= 10);
 
-    // Doctor is initially marked pending_hospital_approval!
-    newUser.status = 'pending_verification';
+    const isDirectHospitalReg = Boolean(req.body.isDirectHospitalRegistration || req.body.isEmbedded);
+    newUser.status = isDirectHospitalReg ? 'active' : 'pending_verification';
     newUser.doctorProfile = {
       govtIdType: doctorData?.govtIdType || 'Aadhar Card',
       govtIdNumber: doctorData?.govtIdNumber || '',
@@ -1237,12 +1327,12 @@ app.post('/api/auth/register', (req, res) => {
       passingYear: doctorData?.passingYear || '2018',
       qualifications: doctorData?.qualifications || doctorData?.ugDegree || 'MBBS',
       yearsOfExperience: Number(doctorData?.yearsOfExperience) || 1,
-      consultationFee: Number(doctorData?.consultationFee) || 50,
-      followUpFee: Number(doctorData?.followUpFee) || Math.round((Number(doctorData?.consultationFee) || 50) * 0.7),
+      consultationFee: Number(doctorData?.consultationFee) || 500,
+      followUpFee: Number(doctorData?.followUpFee) || Math.round((Number(doctorData?.consultationFee) || 500) * 0.6),
       consultationType: doctorData?.consultationType || 'Both (In-Clinic & Video)',
       weeklySchedule: doctorData?.weeklySchedule || 'Mon - Fri: 10:00 AM - 02:00 PM, 05:00 PM - 08:00 PM',
       slotDurationMinutes: Number(doctorData?.slotDurationMinutes) || 15,
-      approvalStatus: 'pending_hospital_approval',
+      approvalStatus: isDirectHospitalReg ? 'approved' : 'pending_hospital_approval',
       leaveDates: [],
       bio: doctorData?.bio || `Physician specializing in ${doctorData?.specialization || 'general care'}.`,
     };
@@ -1399,15 +1489,22 @@ Medical Staff Administration`,
       verificationNotes: 'Hospital registration submitted. Awaiting System Administrator review and approval before activation.',
     };
 
-    // User Requirement: Hospital should NOT get access immediately.
-    // It should get a mail that your request is sent to the admin. He will accept the request after you can enter the sign-in details and log in.
-    const hospitalPendingEmail: SentEmail = {
-      id: `email-hosp-pending-${Date.now()}`,
-      to: email.toLowerCase(),
-      from: MASTER_ADMIN_EMAIL,
-      subject: `📋 Your Hospital is Registered - Please Wait for Admin Acceptance`,
-      preview: `Your hospital registration request has been submitted to the System Administrator.`,
-      body: `Dear Medical Administration of ${hospNameVal},
+    const isDirectAdminReg = Boolean(req.body.isDirectAdminRegistration || (req.body.isEmbedded && role === 'hospital'));
+    if (isDirectAdminReg) {
+      newUser.status = 'active';
+      newUser.hospitalProfile.verificationStatus = 'verified';
+      newUser.hospitalProfile.verificationNotes = 'Authorized and registered directly by System Administrator.';
+    }
+
+    // User Requirement: When self-registered publicly, hospital should wait for admin acceptance.
+    if (!isDirectAdminReg) {
+      const hospitalPendingEmail: SentEmail = {
+        id: `email-hosp-pending-${Date.now()}`,
+        to: email.toLowerCase(),
+        from: MASTER_ADMIN_EMAIL,
+        subject: `📋 Your Hospital is Registered - Please Wait for Admin Acceptance`,
+        preview: `Your hospital registration request has been submitted to the System Administrator.`,
+        body: `Dear Medical Administration of ${hospNameVal},
 
 Your hospital is registered successfully! Your request has been sent to System Administrator HEMANTH.
 
@@ -1421,34 +1518,34 @@ Thank you for your patience.
 
 Warm regards,
 System Administrator HEMANTH`,
-      timestamp: new Date().toISOString(),
-      category: 'hospital_pending',
-    };
-    sentEmails.unshift(hospitalPendingEmail);
-    dispatchRealEmail({
-      to: email.toLowerCase(),
-      from: `"System Administrator" <${MASTER_ADMIN_EMAIL}>`,
-      subject: hospitalPendingEmail.subject,
-      text: hospitalPendingEmail.body,
-    });
-
-    if (hospitalData?.contactEmail && hospitalData.contactEmail.toLowerCase() !== email.toLowerCase()) {
+        timestamp: new Date().toISOString(),
+        category: 'hospital_pending',
+      };
+      sentEmails.unshift(hospitalPendingEmail);
       dispatchRealEmail({
-        to: hospitalData.contactEmail.toLowerCase(),
+        to: email.toLowerCase(),
         from: `"System Administrator" <${MASTER_ADMIN_EMAIL}>`,
         subject: hospitalPendingEmail.subject,
         text: hospitalPendingEmail.body,
       });
-    }
 
-    // Also notify System Administrator HEMANTH
-    const adminNoticeEmail: SentEmail = {
-      id: `email-admin-hosp-${Date.now()}`,
-      to: MASTER_ADMIN_EMAIL,
-      from: MASTER_ADMIN_EMAIL,
-      subject: `🔔 New Hospital Registered: ${hospNameVal} - Awaiting Your Acceptance`,
-      preview: `Hospital ${hospNameVal} (License: ${newUser.hospitalProfile.licenseNumber}) has registered and is pending your verification.`,
-      body: `Hello System Administrator HEMANTH,
+      if (hospitalData?.contactEmail && hospitalData.contactEmail.toLowerCase() !== email.toLowerCase()) {
+        dispatchRealEmail({
+          to: hospitalData.contactEmail.toLowerCase(),
+          from: `"System Administrator" <${MASTER_ADMIN_EMAIL}>`,
+          subject: hospitalPendingEmail.subject,
+          text: hospitalPendingEmail.body,
+        });
+      }
+
+      // Also notify System Administrator HEMANTH
+      const adminNoticeEmail: SentEmail = {
+        id: `email-admin-hosp-${Date.now()}`,
+        to: MASTER_ADMIN_EMAIL,
+        from: MASTER_ADMIN_EMAIL,
+        subject: `🔔 New Hospital Registered: ${hospNameVal} - Awaiting Your Acceptance`,
+        preview: `Hospital ${hospNameVal} (License: ${newUser.hospitalProfile.licenseNumber}) has registered and is pending your verification.`,
+        body: `Hello System Administrator HEMANTH,
 
 A new medical facility has registered on AI Virtual Care:
 
@@ -1465,23 +1562,26 @@ Please review and accept or reject this request in the Admin Dashboard -> Hospit
 
 Best regards,
 SmartHealth Platform Admin Office`,
-      timestamp: new Date().toISOString(),
-      category: 'general',
-    };
-    sentEmails.unshift(adminNoticeEmail);
-    dispatchRealEmail({
-      to: MASTER_ADMIN_EMAIL,
-      from: `"System Security" <${MASTER_ADMIN_EMAIL}>`,
-      subject: adminNoticeEmail.subject,
-      text: adminNoticeEmail.body,
-    });
+        timestamp: new Date().toISOString(),
+        category: 'general',
+      };
+      sentEmails.unshift(adminNoticeEmail);
+      dispatchRealEmail({
+        to: MASTER_ADMIN_EMAIL,
+        from: `"System Security" <${MASTER_ADMIN_EMAIL}>`,
+        subject: adminNoticeEmail.subject,
+        text: adminNoticeEmail.body,
+      });
+    }
   }
 
   users.push(newUser);
   saveStorageToDisk();
-  // User Requirement: Send password credentials ONLY for patients. Hospitals and doctors get credentials after official verification!
+  // Send password credentials for patients or directly authorized registrations
+  const isDirectHospitalReg = Boolean(req.body.isDirectHospitalRegistration || req.body.isEmbedded);
+  const isDirectAdminReg = Boolean(req.body.isDirectAdminRegistration || (req.body.isEmbedded && role === 'hospital'));
   let userPassword: string | undefined = undefined;
-  if (role === 'patient') {
+  if (role === 'patient' || isDirectAdminReg || isDirectHospitalReg) {
     userPassword = sendPasswordEmail(newUser.email, newUser.name, newUser.role, req.body.password);
   }
 
@@ -1489,7 +1589,11 @@ SmartHealth Platform Admin Office`,
     success: true,
     user: newUser,
     password: userPassword,
-    message: role === 'hospital'
+    message: isDirectAdminReg
+      ? `Hospital registered and authorized successfully.`
+      : isDirectHospitalReg
+      ? `Doctor onboarded and authorized successfully.`
+      : role === 'hospital'
       ? `Hospital registration submitted. Your hospital's request is sent to the admin. Please wait for request approval and check your email for further updates.`
       : role === 'doctor'
       ? `Doctor registration submitted. Awaiting hospital management verification. Please wait for the hospital approval email.`
@@ -1997,6 +2101,7 @@ ${MASTER_ADMIN_EMAIL}`,
       text: activationEmail.body,
     });
 
+    saveStorageToDisk();
     return res.json({ success: true, hospital: hosp, emailSent: activationEmail });
   } else if (action === 'hold') {
     hosp.status = 'on_hold';

@@ -43,7 +43,10 @@ import {
   UserX,
   Check,
   FileCheck2,
-  AlertCircle
+  AlertCircle,
+  Globe,
+  Copy,
+  Server
 } from 'lucide-react';
 import { User, HealthcareItem, EmergencyAlert, MEDICAL_SPECIALIZATIONS, UserDocument, KitPaymentOrder } from '../../types';
 import { api } from '../../services/api';
@@ -77,6 +80,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
   // Hospital View & Status Filter
   const [hospitalTabFilter, setHospitalTabFilter] = useState<'pending' | 'verified' | 'on_hold' | 'all'>('pending');
   const [selectedHospitalRecord, setSelectedHospitalRecord] = useState<User | null>(null);
+  const [hospitalDetailTab, setHospitalDetailTab] = useState<'beds' | 'facilities' | 'licenses' | 'doctors'>('beds');
+  const [hospitalLabSearch, setHospitalLabSearch] = useState<string>('');
+
+  // Custom Domain & Deployment Modal State
+  const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
+  const [customDomainInput, setCustomDomainInput] = useState('care.myhospital.org');
+  const [domainProviderTab, setDomainProviderTab] = useState<'cloudrun' | 'vps' | 'docker' | 'dns'>('dns');
+  const [dnsCopiedKey, setDnsCopiedKey] = useState<string | null>(null);
 
   // Doctor Navigation & Sub-Page State (Separate Dedicated Pages)
   const [selectedDoctorViewId, setSelectedDoctorViewId] = useState<string | null>(null);
@@ -681,6 +692,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
             >
               <Plus className="w-4 h-4" />
               <span>Add Healthcare Item</span>
+            </button>
+            <button
+              onClick={() => setIsDomainModalOpen(true)}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Globe className="w-4 h-4 text-indigo-200" />
+              <span>Deploy Custom Domain</span>
             </button>
             {onNavigateToDatabase && (
               <button
@@ -2492,208 +2510,698 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
         </div>
       )}
 
-      {/* ======================= MODAL: HOSPITAL FULL DETAILS & REGISTERED DOCTORS ======================= */}
+      {/* ======================= MODAL: COMPREHENSIVE HOSPITAL AUDIT & DETAILS ======================= */}
       {selectedHospitalRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 my-8 max-h-[90vh] overflow-y-auto space-y-6 animate-in zoom-in-95 text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-amber-100 text-amber-800 rounded-2xl">
-                  <Building2 className="w-6 h-6 text-amber-700" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">
-                    {selectedHospitalRecord.hospitalProfile?.hospitalName || selectedHospitalRecord.name}
-                  </h3>
-                  <p className="text-slate-500 text-xs">
-                    Comprehensive Hospital Facility Audit, Licensing Records, and Affiliated Medical Doctors
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedHospitalRecord(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Hospital Overview Card */}
-            <div className="p-5 bg-gradient-to-r from-amber-50/60 via-slate-50 to-teal-50/40 rounded-2xl border border-amber-200/60 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-slate-900">
+          <div className="bg-white rounded-3xl max-w-5xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 my-8 max-h-[92vh] overflow-y-auto space-y-5 animate-in zoom-in-95 text-xs">
+            {/* Modal Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <img
+                  src={
+                    selectedHospitalRecord.hospitalProfile?.logoUrl ||
+                    selectedHospitalRecord.avatarUrl ||
+                    'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=120&auto=format&fit=crop&q=80'
+                  }
+                  alt="Hospital Logo"
+                  className="w-12 h-12 rounded-2xl object-cover bg-white p-0.5 border border-amber-300 shadow-xs shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-black text-slate-900 truncate">
                       {selectedHospitalRecord.hospitalProfile?.hospitalName || selectedHospitalRecord.name}
-                    </span>
+                    </h3>
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide ${
-                      selectedHospitalRecord.hospitalProfile?.verificationStatus === 'verified'
+                      selectedHospitalRecord.hospitalProfile?.verificationStatus === 'verified' || selectedHospitalRecord.status === 'active'
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        : selectedHospitalRecord.hospitalProfile?.verificationStatus === 'on_hold' || selectedHospitalRecord.status === 'on_hold'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                        : 'bg-rose-100 text-rose-900 border border-rose-300'
                     }`}>
                       {selectedHospitalRecord.hospitalProfile?.verificationStatus || selectedHospitalRecord.status}
                     </span>
+                    {selectedHospitalRecord.hospitalProfile?.isClinicalActVerified && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800 border border-teal-300 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-teal-600" />
+                        <span>Clinical Act Verified</span>
+                      </span>
+                    )}
                   </div>
-                  <p className="text-slate-600 text-xs mt-0.5">
-                    Category: <strong className="text-slate-800">{selectedHospitalRecord.hospitalProfile?.hospitalType || 'Clinical Healthcare Facility'}</strong>
-                  </p>
-                </div>
-
-                {/* Quick Admin Actions & View Doctors Navigation */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const hId = selectedHospitalRecord.id;
-                      setSelectedHospitalRecord(null);
-                      setActiveTab('doctors');
-                      setDoctorHospitalFilter(hId);
-                    }}
-                    className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Stethoscope className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>View Doctors of this Hospital</span>
-                  </button>
-
-                  {selectedHospitalRecord.hospitalProfile?.verificationStatus !== 'verified' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const h = selectedHospitalRecord;
-                          setSelectedHospitalRecord(null);
-                          setActionModal({
-                            isOpen: true,
-                            targetType: 'hospital',
-                            targetId: h.id,
-                            targetName: h.hospitalProfile?.hospitalName || h.name,
-                            action: 'hold',
-                            reason: '',
-                            loading: false,
-                          });
-                        }}
-                        className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
-                      >
-                        <Clock className="w-3.5 h-3.5 text-amber-700" />
-                        <span>Hold</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const h = selectedHospitalRecord;
-                          setSelectedHospitalRecord(null);
-                          setActionModal({
-                            isOpen: true,
-                            targetType: 'hospital',
-                            targetId: h.id,
-                            targetName: h.hospitalProfile?.hospitalName || h.name,
-                            action: 'reject',
-                            reason: '',
-                            loading: false,
-                          });
-                        }}
-                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Reject</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleVerifyHospital(selectedHospitalRecord.id, 'approve');
-                          setSelectedHospitalRecord(null);
-                        }}
-                        className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Verify & Approve Hospital</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Comprehensive Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Govt License #</span>
-                  <strong className="font-mono text-slate-800 text-xs">{selectedHospitalRecord.hospitalProfile?.licenseNumber || 'N/A'}</strong>
-                </div>
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Accreditation</span>
-                  <strong className="text-slate-800 text-xs truncate block">{selectedHospitalRecord.hospitalProfile?.accreditation || 'Standard'}</strong>
-                </div>
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Bed Capacity</span>
-                  <strong className="text-slate-800 text-xs">{selectedHospitalRecord.hospitalProfile?.totalBeds} Beds ({selectedHospitalRecord.hospitalProfile?.icuBeds} ICU)</strong>
-                </div>
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Emergency Hotline</span>
-                  <strong className="text-rose-600 text-xs">{selectedHospitalRecord.hospitalProfile?.emergencyHotline || selectedHospitalRecord.phone}</strong>
-                </div>
-              </div>
-
-              {/* Address and Contacts */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Physical Facility Address</span>
-                  <p className="text-slate-700">
-                    {selectedHospitalRecord.hospitalProfile?.address}, {selectedHospitalRecord.hospitalProfile?.city}, {selectedHospitalRecord.hospitalProfile?.state} - {selectedHospitalRecord.hospitalProfile?.pincode}
-                  </p>
-                </div>
-                <div className="p-2.5 bg-white rounded-xl border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Administrative Representative</span>
-                  <p className="text-slate-700">
-                    Director / In-Charge: <strong>{selectedHospitalRecord.hospitalProfile?.adminRepresentative || 'Medical Superintendent'}</strong>
-                  </p>
-                  <p className="text-slate-500 text-[11px]">
-                    Email: <span className="font-mono text-slate-800">{selectedHospitalRecord.email}</span> • Phone: <span className="font-mono text-slate-800">{selectedHospitalRecord.phone}</span>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    Category: <strong className="text-slate-800">{selectedHospitalRecord.hospitalProfile?.hospitalType || 'Clinical Healthcare Facility'}</strong> · Govt License: <span className="font-mono font-bold text-slate-800">{selectedHospitalRecord.hospitalProfile?.licenseNumber || 'PENDING'}</span>
                   </p>
                 </div>
               </div>
 
-              {/* Uploaded Verification Documents */}
-              <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">
-                  Uploaded Legal Documents & Accreditations ({selectedHospitalRecord.uploadedDocuments?.length || 0})
-                </span>
-                {(!selectedHospitalRecord.uploadedDocuments || selectedHospitalRecord.uploadedDocuments.length === 0) ? (
-                  <p className="text-slate-400 italic text-[11px]">No uploaded documents attached to this hospital record.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {selectedHospitalRecord.uploadedDocuments.map((doc) => (
-                      <div key={doc.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-800 text-xs truncate">{doc.name}</p>
-                          <span className="text-[10px] text-amber-800 uppercase font-mono">{doc.type}</span>
-                        </div>
-                        {doc.url && (
-                          <button
-                            type="button"
-                            onClick={() => setViewingDoc(doc)}
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-bold rounded-lg shrink-0 flex items-center gap-1 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>View Document</span>
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+              {/* Action Buttons in Header */}
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedHospitalRecord.hospitalProfile?.verificationStatus !== 'verified' && selectedHospitalRecord.status !== 'active' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const h = selectedHospitalRecord;
+                        setSelectedHospitalRecord(null);
+                        setActionModal({
+                          isOpen: true,
+                          targetType: 'hospital',
+                          targetId: h.id,
+                          targetName: h.hospitalProfile?.hospitalName || h.name,
+                          action: 'hold',
+                          reason: '',
+                          loading: false,
+                        });
+                      }}
+                      className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Hold Facility</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const h = selectedHospitalRecord;
+                        setSelectedHospitalRecord(null);
+                        setActionModal({
+                          isOpen: true,
+                          targetType: 'hospital',
+                          targetId: h.id,
+                          targetName: h.hospitalProfile?.hospitalName || h.name,
+                          action: 'reject',
+                          reason: '',
+                          loading: false,
+                        });
+                      }}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleVerifyHospital(selectedHospitalRecord.id, 'approve');
+                        setSelectedHospitalRecord(null);
+                      }}
+                      className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Verify & Authorize</span>
+                    </button>
+                  </>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedHospitalRecord(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            {/* Doctors Registered in this Hospital Section */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Stethoscope className="w-4 h-4 text-indigo-600" />
-                  <h4 className="font-extrabold text-sm text-slate-900 uppercase tracking-wide">
-                    Doctors & Specialists Registered in this Hospital
-                  </h4>
+            {/* Modal Tabs Navigation */}
+            <div className="flex border-b border-slate-200 bg-slate-50 p-1 rounded-2xl gap-1 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setHospitalDetailTab('beds')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  hospitalDetailTab === 'beds'
+                    ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-teal-600" />
+                <span>Bed Capacities & Departments</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHospitalDetailTab('facilities')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  hospitalDetailTab === 'facilities'
+                    ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5 text-amber-600" />
+                <span>Facilities, Timings & Diagnostics</span>
+                {selectedHospitalRecord.hospitalProfile?.availableLabTests?.length ? (
+                  <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] rounded-full font-mono">
+                    {selectedHospitalRecord.hospitalProfile.availableLabTests.length}
+                  </span>
+                ) : null}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHospitalDetailTab('licenses')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  hospitalDetailTab === 'licenses'
+                    ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FileCheck2 className="w-3.5 h-3.5 text-purple-600" />
+                <span>Statutory Licenses, Trust & Docs</span>
+                {selectedHospitalRecord.uploadedDocuments?.length ? (
+                  <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 text-[10px] rounded-full font-mono">
+                    {selectedHospitalRecord.uploadedDocuments.length}
+                  </span>
+                ) : null}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHospitalDetailTab('doctors')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  hospitalDetailTab === 'doctors'
+                    ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Stethoscope className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Affiliated Physicians Roster</span>
+                {(() => {
+                  const count = usersList.filter(
+                    (u) =>
+                      u.role === 'doctor' &&
+                      (u.doctorProfile?.hospitalId === selectedHospitalRecord.id ||
+                        u.doctorProfile?.hospitalName?.toLowerCase() === (selectedHospitalRecord.hospitalProfile?.hospitalName || selectedHospitalRecord.name).toLowerCase())
+                  ).length;
+                  return (
+                    <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-800 text-[10px] rounded-full font-mono">
+                      {count}
+                    </span>
+                  );
+                })()}
+              </button>
+            </div>
+
+            {/* ================= TAB 1: BEDS & INFRASTRUCTURE ================= */}
+            {hospitalDetailTab === 'beds' && (
+              <div className="space-y-4 animate-in fade-in">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 bg-teal-50/70 border border-teal-200 rounded-2xl">
+                    <span className="text-[10px] text-teal-700 font-bold uppercase tracking-wider block">Total Registered Beds</span>
+                    <strong className="text-xl font-black font-mono text-teal-950 block mt-1">
+                      {selectedHospitalRecord.hospitalProfile?.totalBeds || 0}
+                    </strong>
+                    <span className="text-[10px] text-teal-700">Official Sanctioned Capacity</span>
+                  </div>
+
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl">
+                    <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider block">Available Beds</span>
+                    <strong className="text-xl font-black font-mono text-emerald-950 block mt-1">
+                      {selectedHospitalRecord.hospitalProfile?.availableBeds ?? selectedHospitalRecord.hospitalProfile?.totalBeds ?? 0}
+                    </strong>
+                    <span className="text-[10px] text-emerald-700">Live Available for Admission</span>
+                  </div>
+
+                  <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-2xl">
+                    <span className="text-[10px] text-rose-700 font-bold uppercase tracking-wider block">ICU Beds</span>
+                    <strong className="text-xl font-black font-mono text-rose-950 block mt-1">
+                      {selectedHospitalRecord.hospitalProfile?.icuBeds || 0}
+                    </strong>
+                    <span className="text-[10px] text-rose-700">Critical Intensive Care</span>
+                  </div>
+
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl">
+                    <span className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider block">NICU Beds</span>
+                    <strong className="text-xl font-black font-mono text-indigo-950 block mt-1">
+                      {selectedHospitalRecord.hospitalProfile?.nicuBeds || 0}
+                    </strong>
+                    <span className="text-[10px] text-indigo-700">Neonatal Intensive Care</span>
+                  </div>
                 </div>
+
+                {/* Detailed Ward Breakdown */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-teal-600" />
+                    <span>Granular Ward & Theater Capacities</span>
+                  </h4>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">General Ward Beds</span>
+                      <strong className="text-slate-800 font-mono text-sm">
+                        {selectedHospitalRecord.hospitalProfile?.generalWardBeds || 'Configured in general pool'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Semi-Private Beds</span>
+                      <strong className="text-slate-800 font-mono text-sm">
+                        {selectedHospitalRecord.hospitalProfile?.semiPrivateBeds || 'Standard allocation'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Private Deluxe Rooms</span>
+                      <strong className="text-slate-800 font-mono text-sm">
+                        {selectedHospitalRecord.hospitalProfile?.privateBeds || 'Standard allocation'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Operation Theaters (OT)</span>
+                      <strong className="text-slate-800 font-mono text-sm">
+                        {selectedHospitalRecord.hospitalProfile?.operationTheaters || '2+ Laminar Airflow OTs'}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Critical Life-Support Infrastructure */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className={`p-3.5 rounded-2xl border flex items-start gap-3 ${
+                    selectedHospitalRecord.hospitalProfile?.bloodBankAvailable
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                      : 'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}>
+                    <HeartPulse className={`w-5 h-5 shrink-0 mt-0.5 ${selectedHospitalRecord.hospitalProfile?.bloodBankAvailable ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <div>
+                      <strong className="font-bold block text-xs">Dedicated In-House Blood Bank</strong>
+                      <p className="text-[11px] mt-0.5">
+                        {selectedHospitalRecord.hospitalProfile?.bloodBankAvailable
+                          ? '✓ Fully licensed 24/7 blood storage & component separation facility available on premises.'
+                          : '✗ No dedicated in-house blood bank. Hospital relies on external regional blood centers.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={`p-3.5 rounded-2xl border flex items-start gap-3 ${
+                    selectedHospitalRecord.hospitalProfile?.oxygenPlantAvailable
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                      : 'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}>
+                    <Activity className={`w-5 h-5 shrink-0 mt-0.5 ${selectedHospitalRecord.hospitalProfile?.oxygenPlantAvailable ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <div>
+                      <strong className="font-bold block text-xs">PSA Medical Oxygen Generation Plant</strong>
+                      <p className="text-[11px] mt-0.5">
+                        {selectedHospitalRecord.hospitalProfile?.oxygenPlantAvailable
+                          ? '✓ 24/7 Dedicated on-site PSA/Cryogenic oxygen generation plant connected to all ICU & ward lines.'
+                          : '✗ Cylinder manifold and liquid medical oxygen backup system without dedicated PSA plant.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Clinical Departments */}
+                <div className="p-4 bg-white border border-slate-200 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                      Specialized Clinical Departments Offered ({selectedHospitalRecord.hospitalProfile?.departments?.length || 0})
+                    </h4>
+                  </div>
+                  {(!selectedHospitalRecord.hospitalProfile?.departments || selectedHospitalRecord.hospitalProfile.departments.length === 0) ? (
+                    <p className="text-slate-400 italic">No specific departments cataloged.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedHospitalRecord.hospitalProfile.departments.map((dept, i) => (
+                        <span key={i} className="px-2.5 py-1 bg-slate-100 text-slate-800 font-semibold rounded-lg text-[11px] border border-slate-200">
+                          {dept}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 2: FACILITIES, TIMINGS & DIAGNOSTIC LABS ================= */}
+            {hospitalDetailTab === 'facilities' && (
+              <div className="space-y-4 animate-in fade-in">
+                {/* Emergency & Operational Timings Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3.5 bg-rose-50/60 border border-rose-200 rounded-2xl space-y-2">
+                    <span className="text-[10px] text-rose-800 font-black uppercase tracking-wider block flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Emergency & Trauma Dispatch Service</span>
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-slate-800 font-bold">
+                        24x7 Emergency Trauma Care: {selectedHospitalRecord.hospitalProfile?.has24x7Emergency ? '✅ ACTIVE (Round the Clock)' : 'Limited Hours'}
+                      </p>
+                      <p className="text-rose-900 font-mono font-bold text-sm">
+                        Emergency Hotline: {selectedHospitalRecord.hospitalProfile?.emergencyHotline || selectedHospitalRecord.phone}
+                      </p>
+                      <p className="text-slate-600 text-[11px]">
+                        Ambulance Dispatch: <span className="font-mono font-semibold text-slate-800">{selectedHospitalRecord.hospitalProfile?.ambulanceContact || 'Central Trauma Ambulance Fleet (108/102)'}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-teal-50/60 border border-teal-200 rounded-2xl space-y-2">
+                    <span className="text-[10px] text-teal-800 font-black uppercase tracking-wider block flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Operational Shifts & Pharmacy</span>
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-slate-800">
+                        OPD Consultation Hours: <strong className="font-semibold text-teal-900">{selectedHospitalRecord.hospitalProfile?.opdHours || '08:00 AM - 08:00 PM (Mon - Sat)'}</strong>
+                      </p>
+                      <p className="text-slate-800">
+                        Emergency Department: <strong className="font-semibold text-rose-900">{selectedHospitalRecord.hospitalProfile?.emergencyHours || '24/7 Round-the-Clock Emergency Trauma Care'}</strong>
+                      </p>
+                      <p className="text-slate-700">
+                        In-House Pharmacy: <strong>{selectedHospitalRecord.hospitalProfile?.hasInhousePharmacy ? '✅ 24/7 Dispensing Chemist Onsite' : 'External Chemist'}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Administrative Liaison & Nodal Spoke */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    <span>Hospital Administrative Authority & Nodal Officer</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Administrative Representative</span>
+                      <strong className="text-slate-900 text-xs block">
+                        {selectedHospitalRecord.hospitalProfile?.adminRepresentative || 'Medical Superintendent'}
+                      </strong>
+                      <p className="text-slate-600 text-[11px]">
+                        Official Email: <span className="font-mono text-slate-800">{selectedHospitalRecord.email}</span>
+                      </p>
+                      <p className="text-slate-600 text-[11px]">
+                        Official Phone: <span className="font-mono text-slate-800">{selectedHospitalRecord.phone}</span>
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Nodal Officer (Emergency & Verification)</span>
+                      <strong className="text-slate-900 text-xs block">
+                        {selectedHospitalRecord.hospitalProfile?.nodalOfficerName || selectedHospitalRecord.hospitalProfile?.adminRepresentative || 'Hospital Nodal Officer'}
+                      </strong>
+                      <p className="text-slate-600 text-[11px]">
+                        Nodal Email: <span className="font-mono text-slate-800">{selectedHospitalRecord.hospitalProfile?.nodalOfficerEmail || selectedHospitalRecord.email}</span>
+                      </p>
+                      <p className="text-slate-600 text-[11px]">
+                        Nodal Phone: <span className="font-mono text-slate-800">{selectedHospitalRecord.hospitalProfile?.nodalOfficerPhone || selectedHospitalRecord.phone}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-xs">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Physical Facility Address & Coordinates</span>
+                    <p className="text-slate-800 mt-0.5">
+                      {selectedHospitalRecord.hospitalProfile?.address || selectedHospitalRecord.hospitalProfile?.streetAddress}, {selectedHospitalRecord.hospitalProfile?.city}, {selectedHospitalRecord.hospitalProfile?.district}, {selectedHospitalRecord.hospitalProfile?.state} - {selectedHospitalRecord.hospitalProfile?.pincode}, {selectedHospitalRecord.hospitalProfile?.country || 'India'}
+                    </p>
+                    {selectedHospitalRecord.hospitalProfile?.latitude && selectedHospitalRecord.hospitalProfile?.longitude && (
+                      <p className="text-slate-500 font-mono text-[11px] mt-0.5">
+                        📍 GPS Geo-Location: Lat {selectedHospitalRecord.hospitalProfile.latitude}, Lng {selectedHospitalRecord.hospitalProfile.longitude}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Diagnostic Labs & Imaging Tests Offered */}
+                <div className="p-4 bg-white border border-slate-200 rounded-2xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-teal-600" />
+                        <span>Diagnostic Labs & Imaging Tests Offered</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Diagnostics cataloged by hospital for patient booking and physician ordering.
+                      </p>
+                    </div>
+
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={hospitalLabSearch}
+                        onChange={(e) => setHospitalLabSearch(e.target.value)}
+                        placeholder="Search diagnostic tests..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const allTests = selectedHospitalRecord.hospitalProfile?.availableLabTests || [
+                      'Complete Blood Count (CBC)',
+                      'Liver Function Test (LFT)',
+                      'Kidney Function Test (KFT)',
+                      'Lipid Profile',
+                      'Thyroid Profile (T3, T4, TSH)',
+                      'HbA1c Blood Glucose',
+                      '12-Lead Digital ECG',
+                      'Digital Chest X-Ray',
+                      'Ultrasound Whole Abdomen',
+                      'CT Scan (High-Resolution)',
+                      'MRI Scan (1.5T / 3.0T)',
+                      '2D Echocardiography',
+                      'Urine Routine & Microscopic',
+                      'RT-PCR Diagnostic Assay'
+                    ];
+
+                    const filteredTests = allTests.filter((t) =>
+                      t.toLowerCase().includes(hospitalLabSearch.toLowerCase().trim())
+                    );
+
+                    if (filteredTests.length === 0) {
+                      return (
+                        <p className="text-slate-400 italic text-xs py-2">
+                          No diagnostic test matches "{hospitalLabSearch}".
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1 max-h-56 overflow-y-auto">
+                        {filteredTests.map((testName, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200 hover:border-teal-300 rounded-xl flex items-center justify-between text-xs transition-colors"
+                          >
+                            <span className="font-semibold text-slate-800 text-[11px] truncate">{testName}</span>
+                            <span className="px-1.5 py-0.2 bg-teal-100 text-teal-800 text-[9px] font-bold rounded-full shrink-0">
+                              Available
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 3: STATUTORY LICENSES, TRUST & DOCS ================= */}
+            {hospitalDetailTab === 'licenses' && (
+              <div className="space-y-4 animate-in fade-in">
+                {/* Clinical Establishment Act Registration */}
+                <div className="p-4 bg-teal-50/60 border border-teal-200 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[10px] font-black text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-teal-600" />
+                      <span>Clinical Establishment Act / Statutory Health License</span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                      selectedHospitalRecord.hospitalProfile?.isClinicalActVerified
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    }`}>
+                      {selectedHospitalRecord.hospitalProfile?.isClinicalActVerified ? 'Verified by Authority' : 'Pending Cross-Verification'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-2.5 bg-white rounded-xl border border-teal-100">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">Statutory Registration #</span>
+                      <strong className="font-mono text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.clinicalEstablishmentRegNo || selectedHospitalRecord.hospitalProfile?.licenseNumber || 'REG-STATUTORY-PENDING'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-teal-100">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">State Health Authority</span>
+                      <strong className="text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.stateHealthAuthority || `${selectedHospitalRecord.hospitalProfile?.state || 'State'} Health & Family Welfare Department`}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-teal-100">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">License Validity Expiration</span>
+                      <strong className="text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.licenseExpiryDate || 'Permanent / Multi-Year Active'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {selectedHospitalRecord.hospitalProfile?.clinicalEstablishmentDocUrl && (
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-teal-200">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-teal-600" />
+                        <span className="font-bold text-slate-800 text-xs truncate">
+                          {selectedHospitalRecord.hospitalProfile.clinicalEstablishmentDocName || 'Clinical Establishment Act Certificate'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setViewingDoc({
+                          name: selectedHospitalRecord.hospitalProfile?.clinicalEstablishmentDocName || 'Clinical Establishment Certificate',
+                          url: selectedHospitalRecord.hospitalProfile?.clinicalEstablishmentDocUrl || '',
+                          type: 'Clinical Establishment Act Document'
+                        })}
+                        className="px-3 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Inspect Certificate</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* NABH / National Accreditation Credentials */}
+                <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileCheck2 className="w-4 h-4 text-amber-600" />
+                      <span>NABH / Quality Accreditation Credentials</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      {selectedHospitalRecord.hospitalProfile?.accreditation || 'NABH Accredited'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-2.5 bg-white rounded-xl border border-amber-100">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">NABH Certificate Number</span>
+                      <strong className="font-mono text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.nabhCertificateNo || selectedHospitalRecord.hospitalProfile?.licenseNumber || 'NABH-AUTH-VERIFIED'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-amber-100">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">Accreditation Validity</span>
+                      <strong className="text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.nabhValidity || 'Valid through 2028 (Under Active Audit)'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {selectedHospitalRecord.hospitalProfile?.nabhDocUrl && (
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-amber-200">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-amber-600" />
+                        <span className="font-bold text-slate-800 text-xs truncate">
+                          {selectedHospitalRecord.hospitalProfile.nabhDocName || 'NABH Official Certificate'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setViewingDoc({
+                          name: selectedHospitalRecord.hospitalProfile?.nabhDocName || 'NABH Certificate',
+                          url: selectedHospitalRecord.hospitalProfile?.nabhDocUrl || '',
+                          type: 'NABH Accreditation Document'
+                        })}
+                        className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Inspect NABH Doc</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Financial & Tax Compliance (PAN & GSTIN) */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Receipt className="w-4 h-4 text-purple-600" />
+                    <span>Statutory Tax & Financial Credentials</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">Hospital Legal PAN</span>
+                      <strong className="font-mono text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.hospitalPan || 'AAAAA0000A'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-400 uppercase font-medium block">Hospital GSTIN</span>
+                      <strong className="font-mono text-slate-900 text-xs">
+                        {selectedHospitalRecord.hospitalProfile?.hospitalGstin || '36AAAAA0000A1Z5'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Insurance TPAs & Government Health Schemes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Cashless Insurance Partners / TPAs</span>
+                      <p className="text-slate-700 text-[11px]">
+                        {selectedHospitalRecord.hospitalProfile?.partneredTPAs?.length
+                          ? selectedHospitalRecord.hospitalProfile.partneredTPAs.join(', ')
+                          : 'Star Health, HDFC ERGO, ICICI Lombard, Max Bupa, Care Health, Medi Assist, Paramount TPA'}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Government Schemes Empaneled</span>
+                      <p className="text-slate-700 text-[11px]">
+                        {selectedHospitalRecord.hospitalProfile?.governmentSchemes?.length
+                          ? selectedHospitalRecord.hospitalProfile.governmentSchemes.join(', ')
+                          : 'Ayushman Bharat PM-JAY, Aarogyasri Scheme, CGHS, ECHS, State Government Health Scheme'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Uploaded Verification Documents & Certificates */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                    All Attached Legal Documents & Certificates ({selectedHospitalRecord.uploadedDocuments?.length || 0})
+                  </span>
+                  {(!selectedHospitalRecord.uploadedDocuments || selectedHospitalRecord.uploadedDocuments.length === 0) ? (
+                    <p className="text-slate-400 italic text-[11px]">No uploaded documents attached to this hospital record.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedHospitalRecord.uploadedDocuments.map((doc) => (
+                        <div key={doc.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 text-xs truncate">{doc.name}</p>
+                            <span className="text-[10px] text-purple-700 uppercase font-mono font-bold">{doc.type}</span>
+                          </div>
+                          {doc.url && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingDoc(doc)}
+                              className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 text-[11px] font-bold rounded-lg shrink-0 flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View Document</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 4: DOCTORS ROSTER ================= */}
+            {hospitalDetailTab === 'doctors' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Stethoscope className="w-4 h-4 text-indigo-600" />
+                    <h4 className="font-extrabold text-sm text-slate-900 uppercase tracking-wide">
+                      Physicians & Specialists Registered in this Facility
+                    </h4>
+                  </div>
+                </div>
+
                 {(() => {
                   const affiliatedDocs = usersList.filter(
                     (u) =>
@@ -2701,95 +3209,469 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
                       (u.doctorProfile?.hospitalId === selectedHospitalRecord.id ||
                         u.doctorProfile?.hospitalName?.toLowerCase() === (selectedHospitalRecord.hospitalProfile?.hospitalName || selectedHospitalRecord.name).toLowerCase())
                   );
+
+                  if (affiliatedDocs.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+                        <Stethoscope className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
+                        <p className="font-semibold text-slate-600 text-xs">No doctors currently registered in this hospital.</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">When doctors onboard with this hospital facility, they will appear here.</p>
+                      </div>
+                    );
+                  }
+
                   return (
-                    <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold rounded-full text-[10px]">
-                      {affiliatedDocs.length} Physicians Registered
-                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {affiliatedDocs.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-indigo-300 transition-all flex flex-col justify-between gap-3"
+                        >
+                          <div className="flex items-start gap-3">
+                            <img
+                              src={doc.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(doc.name)}`}
+                              alt={doc.name}
+                              className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h5 className="font-bold text-slate-900 text-xs">{doc.name}</h5>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
+                                  doc.doctorProfile?.approvalStatus === 'approved'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {doc.doctorProfile?.approvalStatus || 'Active'}
+                                </span>
+                              </div>
+                              <p className="text-indigo-700 font-semibold text-[11px]">
+                                {doc.doctorProfile?.specialization}
+                              </p>
+                              <p className="text-slate-500 text-[10px] mt-0.5">
+                                {doc.doctorProfile?.qualifications || 'MBBS'} • Exp: {doc.doctorProfile?.yearsOfExperience || 1} yrs • OPD Fee: ₹{doc.doctorProfile?.consultationFee ?? 500}
+                              </p>
+                              <p className="text-slate-400 font-mono text-[10px]">
+                                Reg No: {doc.doctorProfile?.medicalLicenseNumber || 'MED-LIC'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <span className={`text-[10px] font-bold ${doc.doctorProfile?.inSurgery ? 'text-rose-600' : 'text-emerald-700'}`}>
+                              {doc.doctorProfile?.inSurgery ? '🔴 In Surgery' : '🟢 Available for OPD'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleViewDoctorInAdmin(doc.id)}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-[11px] shadow-xs flex items-center gap-1 transition-all cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Doctor Practice Audit</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   );
                 })()}
               </div>
+            )}
 
-              {(() => {
-                const affiliatedDocs = usersList.filter(
-                  (u) =>
-                    u.role === 'doctor' &&
-                    (u.doctorProfile?.hospitalId === selectedHospitalRecord.id ||
-                      u.doctorProfile?.hospitalName?.toLowerCase() === (selectedHospitalRecord.hospitalProfile?.hospitalName || selectedHospitalRecord.name).toLowerCase())
-                );
-
-                if (affiliatedDocs.length === 0) {
-                  return (
-                    <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
-                      <Stethoscope className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
-                      <p className="font-semibold text-slate-600 text-xs">No doctors currently registered in this hospital.</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">When doctors onboard with this hospital facility, they will appear here.</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {affiliatedDocs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-indigo-300 transition-all flex flex-col justify-between gap-3"
-                      >
-                        <div className="flex items-start gap-3">
-                          <img
-                            src={doc.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(doc.name)}`}
-                            alt={doc.name}
-                            className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <h5 className="font-bold text-slate-900 text-xs">{doc.name}</h5>
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
-                                doc.doctorProfile?.approvalStatus === 'approved'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}>
-                                {doc.doctorProfile?.approvalStatus || 'Active'}
-                              </span>
-                            </div>
-                            <p className="text-indigo-700 font-semibold text-[11px]">
-                              {doc.doctorProfile?.specialization}
-                            </p>
-                            <p className="text-slate-500 text-[10px] mt-0.5">
-                              {doc.doctorProfile?.qualifications || 'MBBS'} • Exp: {doc.doctorProfile?.yearsOfExperience || 1} yrs • Fee: ${doc.doctorProfile?.consultationFee ?? 50}
-                            </p>
-                            <p className="text-slate-400 font-mono text-[10px]">
-                              Lic: {doc.doctorProfile?.medicalLicenseNumber || 'MED-LIC'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                          <span className={`text-[10px] font-bold ${doc.doctorProfile?.inSurgery ? 'text-rose-600' : 'text-emerald-700'}`}>
-                            {doc.doctorProfile?.inSurgery ? '🔴 In Surgery' : '🟢 Available'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleViewDoctorInAdmin(doc.id)}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-[11px] shadow-xs flex items-center gap-1 transition-all cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>View Doctor Audit & Prescriptions</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex justify-end">
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 font-mono">
+                Facility ID: {selectedHospitalRecord.id}
+              </span>
               <button
                 type="button"
                 onClick={() => setSelectedHospitalRecord(null)}
                 className="px-5 py-2 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
               >
                 Close Hospital File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= MODAL: CUSTOM DOMAIN & DEPLOYMENT GUIDE ======================= */}
+      {isDomainModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 my-8 max-h-[92vh] overflow-y-auto space-y-5 animate-in zoom-in-95 text-xs">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-xs">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Deploy With Your Own Custom Domain Name
+                  </h3>
+                  <p className="text-slate-500 text-xs">
+                    Configure DNS records (A / CNAME), automated SSL/TLS certificates, and production hosting for your brand.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDomainModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Custom Domain Input Bar */}
+            <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1">
+                  <label className="block text-indigo-950 font-bold text-xs mb-1">
+                    Enter Your Custom Domain Name or Subdomain:
+                  </label>
+                  <div className="relative">
+                    <Globe className="w-4 h-4 absolute left-3 top-2.5 text-indigo-500" />
+                    <input
+                      type="text"
+                      value={customDomainInput}
+                      onChange={(e) => setCustomDomainInput(e.target.value.toLowerCase().trim())}
+                      placeholder="e.g. care.yourhospital.org or yourhospital.com"
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-indigo-300 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 sm:self-end">
+                  <span className="text-[10px] text-indigo-700 font-semibold block sm:inline">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => setCustomDomainInput('care.myhospital.org')}
+                    className="px-2.5 py-1 bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-lg text-[10px] font-bold cursor-pointer"
+                  >
+                    care.myhospital.org
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomDomainInput('telehealth.healthcity.in')}
+                    className="px-2.5 py-1 bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-lg text-[10px] font-bold cursor-pointer"
+                  >
+                    telehealth.healthcity.in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomDomainInput('smarthealthportal.com')}
+                    className="px-2.5 py-1 bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-lg text-[10px] font-bold cursor-pointer"
+                  >
+                    smarthealthportal.com
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Provider Tabs */}
+            <div className="flex border-b border-slate-200 bg-slate-50 p-1 rounded-2xl gap-1 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setDomainProviderTab('dns')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  domainProviderTab === 'dns'
+                    ? 'bg-white text-indigo-900 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                <span>1. DNS Record Settings</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDomainProviderTab('cloudrun')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  domainProviderTab === 'cloudrun'
+                    ? 'bg-white text-indigo-900 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Server className="w-3.5 h-3.5 text-teal-600" />
+                <span>2. Google Cloud Run (Recommended)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDomainProviderTab('vps')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  domainProviderTab === 'vps'
+                    ? 'bg-white text-indigo-900 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Code className="w-3.5 h-3.5 text-purple-600" />
+                <span>3. Linux VPS & Nginx SSL</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDomainProviderTab('docker')}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  domainProviderTab === 'docker'
+                    ? 'bg-white text-indigo-900 shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5 text-amber-600" />
+                <span>4. Docker & Production Build</span>
+              </button>
+            </div>
+
+            {/* TAB CONTENT: DNS SETTINGS */}
+            {domainProviderTab === 'dns' && (
+              <div className="space-y-4 animate-in fade-in">
+                <p className="text-slate-600 text-xs">
+                  Log in to your domain registrar (GoDaddy, Namecheap, Cloudflare, AWS Route53, Google Domains/Squarespace) and navigate to <strong>DNS Management</strong>. Add the following records for <strong className="text-indigo-950 font-mono">{customDomainInput || 'your-domain.com'}</strong>:
+                </p>
+
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase text-[10px] tracking-wider font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3">Type</th>
+                        <th className="py-2.5 px-3">Host / Name</th>
+                        <th className="py-2.5 px-3">Value / Target</th>
+                        <th className="py-2.5 px-3">TTL</th>
+                        <th className="py-2.5 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                      {/* CNAME Record */}
+                      <tr>
+                        <td className="py-3 px-3 font-bold text-teal-700">CNAME</td>
+                        <td className="py-3 px-3 font-bold text-slate-800">
+                          {customDomainInput.includes('.') ? customDomainInput.split('.')[0] : 'care'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-700 truncate max-w-xs">
+                          ghs.googlehosted.com
+                        </td>
+                        <td className="py-3 px-3 text-slate-500">3600 (Auto)</td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText('ghs.googlehosted.com');
+                              setDnsCopiedKey('cname');
+                              setTimeout(() => setDnsCopiedKey(null), 2500);
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[10px] cursor-pointer"
+                          >
+                            {dnsCopiedKey === 'cname' ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Apex A Record (if user uses root domain) */}
+                      <tr>
+                        <td className="py-3 px-3 font-bold text-indigo-700">A Record</td>
+                        <td className="py-3 px-3 font-bold text-slate-800">@</td>
+                        <td className="py-3 px-3 text-slate-700">216.239.32.21</td>
+                        <td className="py-3 px-3 text-slate-500">3600</td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText('216.239.32.21');
+                              setDnsCopiedKey('a1');
+                              setTimeout(() => setDnsCopiedKey(null), 2500);
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[10px] cursor-pointer"
+                          >
+                            {dnsCopiedKey === 'a1' ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Secondary A Record */}
+                      <tr>
+                        <td className="py-3 px-3 font-bold text-indigo-700">A Record</td>
+                        <td className="py-3 px-3 font-bold text-slate-800">@</td>
+                        <td className="py-3 px-3 text-slate-700">216.239.34.21</td>
+                        <td className="py-3 px-3 text-slate-500">3600</td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText('216.239.34.21');
+                              setDnsCopiedKey('a2');
+                              setTimeout(() => setDnsCopiedKey(null), 2500);
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[10px] cursor-pointer"
+                          >
+                            {dnsCopiedKey === 'a2' ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* SSL Verification TXT Record */}
+                      <tr>
+                        <td className="py-3 px-3 font-bold text-amber-700">TXT</td>
+                        <td className="py-3 px-3 font-bold text-slate-800">@</td>
+                        <td className="py-3 px-3 text-slate-700 truncate max-w-xs">
+                          smarthealth-verify-domain={customDomainInput || 'domain'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-500">300</td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`smarthealth-verify-domain=${customDomainInput || 'domain'}`);
+                              setDnsCopiedKey('txt');
+                              setTimeout(() => setDnsCopiedKey(null), 2500);
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold text-[10px] cursor-pointer"
+                          >
+                            {dnsCopiedKey === 'txt' ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-1">
+                  <h4 className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Automatic Free SSL/TLS Provisioning</span>
+                  </h4>
+                  <p className="text-emerald-800 text-[11px]">
+                    Once your DNS records propagate (typically 5 to 15 minutes), the hosting platform automatically issues a 2048-bit Let's Encrypt / Google-managed SSL Certificate. HTTPS traffic will automatically be enforced on port 443 with green padlock security.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: CLOUD RUN */}
+            {domainProviderTab === 'cloudrun' && (
+              <div className="space-y-3 animate-in fade-in">
+                <p className="text-slate-600 text-xs">
+                  Deploying to Google Cloud Run gives your platform serverless auto-scaling and automatic custom domain mapping with free managed SSL certificates.
+                </p>
+
+                <div className="p-4 bg-slate-900 text-purple-200 rounded-2xl font-mono text-[11px] space-y-2 border border-slate-800">
+                  <div className="flex items-center justify-between text-slate-400 pb-2 border-b border-slate-800">
+                    <span>Deploy & Map Domain Commands</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cmd = `npm run build\ngcloud run deploy smarthealth --source . --port 3000 --allow-unauthenticated\ngcloud beta run domain-mappings create --service smarthealth --domain ${customDomainInput}`;
+                        navigator.clipboard.writeText(cmd);
+                        setDnsCopiedKey('gcloud');
+                        setTimeout(() => setDnsCopiedKey(null), 2500);
+                      }}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-purple-300 rounded text-[10px] cursor-pointer font-sans"
+                    >
+                      {dnsCopiedKey === 'gcloud' ? '✓ Copied Commands' : 'Copy All'}
+                    </button>
+                  </div>
+                  <p className="text-teal-400"># 1. Build frontend bundle for production</p>
+                  <p className="text-white">npm run build</p>
+                  <p className="text-teal-400 mt-2"># 2. Deploy full-stack container to Cloud Run</p>
+                  <p className="text-white">gcloud run deploy smarthealth-app --source . --port 3000 --allow-unauthenticated</p>
+                  <p className="text-teal-400 mt-2"># 3. Map your custom domain to the deployed service</p>
+                  <p className="text-white">gcloud beta run domain-mappings create --service smarthealth-app --domain {customDomainInput}</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs space-y-1">
+                  <strong className="block font-bold">Cloud Run Console Steps:</strong>
+                  <p>1. Open Google Cloud Console → Cloud Run → Click your service.</p>
+                  <p>2. Click <strong>"Manage Custom Domains"</strong> at top.</p>
+                  <p>3. Click <strong>"Add Mapping"</strong>, select service <code>smarthealth-app</code>, and enter <code>{customDomainInput}</code>.</p>
+                  <p>4. Google will output the exact CNAME/A records to paste into your registrar.</p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: LINUX VPS */}
+            {domainProviderTab === 'vps' && (
+              <div className="space-y-3 animate-in fade-in">
+                <p className="text-slate-600 text-xs">
+                  If hosting on an Ubuntu/Debian Cloud VPS (DigitalOcean, AWS EC2, Linode, Hostinger VPS), configure Nginx as a reverse proxy with automated Let's Encrypt SSL:
+                </p>
+
+                <div className="p-4 bg-slate-900 text-slate-200 rounded-2xl font-mono text-[11px] space-y-2 border border-slate-800">
+                  <div className="flex items-center justify-between text-slate-400 pb-2 border-b border-slate-800 font-sans">
+                    <span>Nginx Site Configuration (/etc/nginx/sites-available/{customDomainInput})</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nginx = `server {\n    server_name ${customDomainInput};\n\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection 'upgrade';\n        proxy_set_header Host $host;\n        proxy_cache_bypass $http_upgrade;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}`;
+                        navigator.clipboard.writeText(nginx);
+                        setDnsCopiedKey('nginx');
+                        setTimeout(() => setDnsCopiedKey(null), 2500);
+                      }}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-purple-300 rounded text-[10px] cursor-pointer"
+                    >
+                      {dnsCopiedKey === 'nginx' ? '✓ Copied Config' : 'Copy Nginx Config'}
+                    </button>
+                  </div>
+                  <pre className="text-emerald-300 whitespace-pre overflow-x-auto text-[10px] leading-relaxed">
+{`server {
+    server_name ${customDomainInput};
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`}
+                  </pre>
+                </div>
+
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1 text-purple-950 text-xs font-mono">
+                  <strong className="block font-bold font-sans">Issue Free SSL via Certbot:</strong>
+                  <p>sudo certbot --nginx -d {customDomainInput}</p>
+                  <p className="text-purple-700 text-[11px] font-sans">Certbot will automatically verify ownership, install SSL certificate, and schedule auto-renewals.</p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: DOCKER & PRODUCTION START */}
+            {domainProviderTab === 'docker' && (
+              <div className="space-y-3 animate-in fade-in">
+                <p className="text-slate-600 text-xs">
+                  Run the complete full-stack Node.js & Vite bundle in production mode:
+                </p>
+
+                <div className="p-4 bg-slate-900 text-slate-200 rounded-2xl font-mono text-[11px] space-y-2 border border-slate-800">
+                  <p className="text-slate-400 font-sans font-bold">Standard Node.js Production Run:</p>
+                  <p className="text-teal-400"># 1. Install dependencies & compile frontend dist</p>
+                  <p className="text-white">npm install</p>
+                  <p className="text-white">npm run build</p>
+                  <p className="text-teal-400 mt-2"># 2. Launch production Express server on port 3000</p>
+                  <p className="text-white">NODE_ENV=production PORT=3000 npm start</p>
+                </div>
+
+                <div className="p-4 bg-slate-900 text-slate-200 rounded-2xl font-mono text-[11px] space-y-2 border border-slate-800">
+                  <p className="text-slate-400 font-sans font-bold">Docker Container Run:</p>
+                  <p className="text-teal-400"># Build and run Docker image binding to port 80/443</p>
+                  <p className="text-white">docker build -t smarthealth-app .</p>
+                  <p className="text-white">docker run -d -p 80:3000 -v $(pwd)/data:/app/data --name smarthealth smarthealth-app</p>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-500">
+                Detailed file guide saved at <strong>DEPLOYMENT_CUSTOM_DOMAIN_GUIDE.md</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsDomainModalOpen(false)}
+                className="px-5 py-2 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
+              >
+                Close Deployment Center
               </button>
             </div>
           </div>

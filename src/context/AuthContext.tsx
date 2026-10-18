@@ -26,14 +26,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Check if user session stored in localStorage
     const savedUserId = localStorage.getItem('smarthealth_user_id');
+    const cachedUserStr = localStorage.getItem('smarthealth_user_data');
+    if (cachedUserStr) {
+      try {
+        const cached = JSON.parse(cachedUserStr);
+        if (cached && cached.id) {
+          setUser(cached);
+        }
+      } catch {}
+    }
+
     if (savedUserId) {
       api.getAllUsers().then((users) => {
-        const found = users.find((u) => u.id === savedUserId);
-        if (found) {
-          setUser(found);
-        } else {
-          localStorage.removeItem('smarthealth_user_id');
-          setUser(null);
+        if (Array.isArray(users)) {
+          const found = users.find((u) => u.id === savedUserId);
+          if (found) {
+            setUser(found);
+            localStorage.setItem('smarthealth_user_data', JSON.stringify(found));
+          }
         }
         setIsLoading(false);
       }).catch(() => {
@@ -60,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.login(email);
       setUser(res.user);
       localStorage.setItem('smarthealth_user_id', res.user.id);
+      localStorage.setItem('smarthealth_user_data', JSON.stringify(res.user));
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.googleLogin({ email, name, avatarUrl, autoCreateIfNotFound: false });
       setUser(res.user);
       localStorage.setItem('smarthealth_user_id', res.user.id);
+      localStorage.setItem('smarthealth_user_data', JSON.stringify(res.user));
     } finally {
       setIsLoading(false);
     }
@@ -93,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.user.role === 'patient' && res.user.status === 'active') {
         setUser(res.user);
         localStorage.setItem('smarthealth_user_id', res.user.id);
+        localStorage.setItem('smarthealth_user_data', JSON.stringify(res.user));
       }
       return res;
     } finally {
@@ -106,6 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.updateUser(user.id, payload);
       setUser(res.user);
+      localStorage.setItem('smarthealth_user_data', JSON.stringify(res.user));
     } finally {
       setIsLoading(false);
     }
@@ -118,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await api.deleteUser(user.id);
       setUser(null);
       localStorage.removeItem('smarthealth_user_id');
+      localStorage.removeItem('smarthealth_user_data');
     } finally {
       setIsLoading(false);
     }
@@ -126,6 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('smarthealth_user_id');
+    localStorage.removeItem('smarthealth_user_data');
   };
 
   const refreshUser = async () => {

@@ -4383,10 +4383,87 @@ export const PatientDashboard: React.FC = () => {
             )}
 
             <form onSubmit={handleBookAppointmentSubmit} className="space-y-3.5 mt-4">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <p className="font-bold text-slate-800">{selectedDoctorForBooking.name}</p>
-                <p className="text-teal-700 font-semibold">{selectedDoctorForBooking.doctorProfile?.specialization} • Fee: ${selectedDoctorForBooking.doctorProfile?.consultationFee}</p>
-                <p className="text-slate-500 text-[11px]">{selectedDoctorForBooking.doctorProfile?.hospitalName}</p>
+              <div className="p-4 bg-gradient-to-br from-teal-50/80 via-slate-50 to-indigo-50/50 rounded-2xl border border-teal-200/80 shadow-2xs space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-slate-900 text-sm">
+                        Dr. {selectedDoctorForBooking.name}
+                      </span>
+                      {selectedDoctorForBooking.doctorProfile?.qualifications && (
+                        <span className="text-[11px] font-mono font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                          {selectedDoctorForBooking.doctorProfile.qualifications}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-teal-800 font-bold text-xs mt-0.5">
+                      {selectedDoctorForBooking.doctorProfile?.specialization}
+                      {selectedDoctorForBooking.doctorProfile?.subSpecialties?.length ? ` • ${selectedDoctorForBooking.doctorProfile.subSpecialties.join(', ')}` : ''}
+                    </p>
+                    <p className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{selectedDoctorForBooking.doctorProfile?.hospitalName || 'Affiliated Super-Specialty Medical Center'}</span>
+                    </p>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">OPD Consult Fee</span>
+                    <span className="font-extrabold text-teal-700 text-base font-mono">
+                      ₹{selectedDoctorForBooking.doctorProfile?.consultationFee || 500}
+                    </span>
+                    {selectedDoctorForBooking.doctorProfile?.followUpFee ? (
+                      <span className="text-[10px] text-slate-500 block font-medium">
+                        Follow-up: <strong className="text-slate-700 font-mono">₹{selectedDoctorForBooking.doctorProfile.followUpFee}</strong>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 block font-medium">
+                        Follow-up: <strong className="text-slate-600 font-mono">₹{Math.round((selectedDoctorForBooking.doctorProfile?.consultationFee || 500) * 0.6)}</strong> (7-day review)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Comprehensive Timings, Duration & Consultation Economics Breakdown */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-teal-100 text-[11px]">
+                  <div className="p-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-teal-600" />
+                      <span>Consultation Mode</span>
+                    </span>
+                    <strong className="text-slate-800 text-xs block mt-0.5 truncate">
+                      {selectedDoctorForBooking.doctorProfile?.consultationType || 'Both (In-Clinic & Video)'}
+                    </strong>
+                  </div>
+
+                  <div className="p-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block flex items-center gap-1">
+                      <Activity className="w-3 h-3 text-indigo-600" />
+                      <span>Slot Duration</span>
+                    </span>
+                    <strong className="text-slate-800 text-xs block mt-0.5 font-mono">
+                      {selectedDoctorForBooking.doctorProfile?.slotDurationMinutes || 15} Minutes / Patient
+                    </strong>
+                  </div>
+
+                  <div className="p-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs col-span-2 sm:col-span-1">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-teal-600" />
+                      <span>Weekly Practice Hours</span>
+                    </span>
+                    <strong className="text-slate-800 text-[11px] block mt-0.5 truncate">
+                      {selectedDoctorForBooking.doctorProfile?.weeklySchedule || 'Mon - Sat: 09:00 AM - 05:00 PM'}
+                    </strong>
+                  </div>
+                </div>
+
+                {selectedDoctorForBooking.doctorProfile?.medicalLicenseNumber && (
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                    <span>Medical Council Reg: <strong className="font-mono text-slate-700">{selectedDoctorForBooking.doctorProfile.medicalLicenseNumber}</strong></span>
+                    {selectedDoctorForBooking.doctorProfile?.languagesSpoken?.length ? (
+                      <span>Languages: <strong className="text-slate-700">{selectedDoctorForBooking.doctorProfile.languagesSpoken.join(', ')}</strong></span>
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               {selectedDoctorForBooking.doctorProfile?.inSurgery ? (
@@ -4596,6 +4673,27 @@ export const PatientDashboard: React.FC = () => {
                   placeholder="Any symptoms, sensations, or medications to share with doctor..."
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                 />
+              </div>
+
+              {/* Consultation Appointment Summary Preview */}
+              <div className="p-3 bg-teal-50/80 border border-teal-200/90 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[10px] text-teal-800 font-extrabold uppercase tracking-wider block">
+                    Consultation Booking Summary
+                  </span>
+                  <p className="font-semibold text-slate-800 text-[11px] mt-0.5">
+                    Date: <span className="font-bold text-teal-900">{bookingDate || 'Select Date Above'}</span> · Slot: <span className="font-mono font-bold text-teal-900">{bookingSlot || 'Select Slot Above'}</span>
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Duration: {selectedDoctorForBooking.doctorProfile?.slotDurationMinutes || 15} mins • Mode: {selectedDoctorForBooking.doctorProfile?.consultationType || 'In-Clinic & Video'}
+                  </p>
+                </div>
+                <div className="text-right shrink-0 pl-3 border-l border-teal-200">
+                  <span className="text-[10px] text-slate-500 font-medium block">Total Payable Fee</span>
+                  <span className="font-black text-teal-800 text-sm font-mono">
+                    ₹{selectedDoctorForBooking.doctorProfile?.consultationFee || 500}
+                  </span>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">

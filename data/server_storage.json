@@ -9,6 +9,157 @@
       "status": "active",
       "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80",
       "createdAt": "2026-01-10T08:00:00Z"
+    },
+    {
+      "id": "usr-pat-1792230649743",
+      "name": "Test Patient One",
+      "email": "testpatient1@gmail.com",
+      "phone": "+91 9988776655",
+      "role": "patient",
+      "status": "active",
+      "createdAt": "2026-10-17T09:50:49.743Z",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=Test%20Patient%20One",
+      "uploadedDocuments": [],
+      "patientProfile": {
+        "govtIdType": "Aadhar Card",
+        "govtIdNumber": "1234 5678 9012",
+        "dateOfBirth": "1995-01-01",
+        "gender": "male",
+        "bloodGroup": "B+",
+        "heightCm": 170,
+        "weightKg": 70,
+        "bmi": 24.2,
+        "streetAddress": "",
+        "city": "",
+        "state": "",
+        "pincode": "",
+        "existingConditions": [],
+        "allergies": [],
+        "currentMedications": [],
+        "emergencyContact": {
+          "name": "Emergency Contact",
+          "relationship": "Relative",
+          "phone": "+91 9988776655"
+        },
+        "emergencyContactsList": [
+          {
+            "id": "ec-1792230649743",
+            "name": "Emergency Contact",
+            "relationship": "Relative",
+            "phone": "+91 9988776655",
+            "priority": "primary",
+            "notifySms": true,
+            "notifyEmail": true,
+            "shareLiveLocation": true
+          }
+        ],
+        "connectedDevices": []
+      }
+    },
+    {
+      "id": "hosp-1",
+      "name": "Metro General Hospital & Heart Institute",
+      "email": "management@metrogeneral.org",
+      "phone": "+91 (040) 2345-6789",
+      "role": "hospital",
+      "status": "active",
+      "avatarUrl": "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=256&q=80",
+      "createdAt": "2026-01-15T09:30:00Z",
+      "hospitalProfile": {
+        "hospitalName": "Metro General Hospital & Heart Institute",
+        "hospitalType": "Private Super-Specialty",
+        "licenseNumber": "HOSP-LIC-2024-8841",
+        "accreditation": "JCI & NABH Certified Gold",
+        "address": "742 Healthcare Boulevard, Medical District",
+        "city": "Hyderabad",
+        "district": "Hyderabad",
+        "state": "Telangana",
+        "pincode": "500001",
+        "emergencyHotline": "+91 1800-425-9111",
+        "contactEmail": "emergency@metrogeneral.org",
+        "contactPhone": "+91 (040) 2345-6789",
+        "adminRepresentative": "Director Eleanor Vance",
+        "departments": [
+          "Cardiology (Heart & Blood Vessels)",
+          "Emergency & Trauma Medicine",
+          "Pulmonology (Lungs & Respiratory)",
+          "Neurology & Stroke Care (Brain & Nerves)",
+          "General & Internal Medicine"
+        ],
+        "totalBeds": 450,
+        "availableBeds": 86,
+        "icuBeds": 42,
+        "verificationStatus": "verified"
+      }
+    },
+    {
+      "id": "hosp-2",
+      "name": "Apex Super Specialty Care",
+      "email": "admin@apexcare.org",
+      "phone": "+91 (040) 9876-5432",
+      "role": "hospital",
+      "status": "active",
+      "avatarUrl": "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=256&q=80",
+      "createdAt": "2026-02-01T10:00:00Z",
+      "hospitalProfile": {
+        "hospitalName": "Apex Super Specialty Care",
+        "hospitalType": "Private Super-Specialty",
+        "licenseNumber": "HOSP-LIC-2025-1029",
+        "accreditation": "State Health Board Super Specialty Tier-1",
+        "address": "120 Science Park Way",
+        "city": "Hyderabad",
+        "district": "Hyderabad",
+        "state": "Telangana",
+        "pincode": "500002",
+        "emergencyHotline": "+91 1800-425-8222",
+        "contactEmail": "er@apexcare.org",
+        "contactPhone": "+91 (040) 9876-5432",
+        "adminRepresentative": "Dr. Michael Chen, Chief of Medicine",
+        "departments": [
+          "Pulmonology (Lungs & Respiratory)",
+          "Orthopedics (Bones & Joints)",
+          "Cardiology (Heart & Blood Vessels)",
+          "Nephrology (Kidney Care)"
+        ],
+        "totalBeds": 320,
+        "availableBeds": 54,
+        "icuBeds": 30,
+        "verificationStatus": "verified"
+      }
+    },
+    {
+      "id": "hosp-pending-1",
+      "name": "St. Jude Trauma & Research Hospital",
+      "email": "admin@stjudetrauma.org",
+      "phone": "+91 (040) 7654-3210",
+      "role": "hospital",
+      "status": "pending_verification",
+      "avatarUrl": "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=256&q=80",
+      "createdAt": "2026-09-28T14:15:00Z",
+      "hospitalProfile": {
+        "hospitalName": "St. Jude Trauma & Research Hospital",
+        "hospitalType": "Trust / Non-Profit",
+        "licenseNumber": "HOSP-LIC-REQ-9921",
+        "accreditation": "Level-1 Trauma & Regional Cardiac Center Candidate",
+        "address": "450 North Valley Expressway",
+        "city": "Hyderabad",
+        "district": "Hyderabad",
+        "state": "Telangana",
+        "pincode": "500003",
+        "emergencyHotline": "+91 1800-425-9333",
+        "contactEmail": "trauma@stjudetrauma.org",
+        "contactPhone": "+91 (040) 7654-3210",
+        "adminRepresentative": "Sarah Jenkins, Hospital Administrator",
+        "departments": [
+          "Emergency & Trauma Medicine",
+          "Cardiology (Heart & Blood Vessels)",
+          "Orthopedics (Bones & Joints)"
+        ],
+        "totalBeds": 280,
+        "availableBeds": 70,
+        "icuBeds": 35,
+        "verificationStatus": "pending_admin_verification"
+      }
     }
   ],
   "appointments": [],
@@ -102,5 +253,5 @@
   ],
   "kitPayments": [],
   "labTestOrders": [],
-  "lastSaved": "2026-10-16T14:13:55.722Z"
+  "lastSaved": "2026-10-18T05:40:39.323Z"
 }

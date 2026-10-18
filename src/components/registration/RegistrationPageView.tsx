@@ -35,6 +35,7 @@ import {
   Flame,
   ShieldAlert,
   DollarSign,
+  IndianRupee,
   Calendar,
   AlertTriangle,
   ChevronRight
@@ -107,18 +108,34 @@ interface PatientRegEmergencyContact {
   phone: string;
 }
 
-interface RegistrationPageViewProps {
+export interface RegistrationPageViewProps {
   onOpenSignIn?: () => void;
   defaultRole?: 'hospital' | 'doctor' | 'patient';
+  lockRole?: boolean;
   initialGoogleAccount?: { email: string; name: string } | null;
-  onRegistrationComplete?: () => void;
+  onRegistrationComplete?: (registeredUser?: User) => void;
+  onCancel?: () => void;
+  isEmbedded?: boolean;
+  embeddedTitle?: string;
+  preselectedHospitalId?: string;
+  preselectedHospitalName?: string;
+  preselectedDoctorId?: string;
+  preselectedDoctorName?: string;
 }
 
 export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   onOpenSignIn,
   defaultRole = 'hospital',
+  lockRole = false,
   initialGoogleAccount,
   onRegistrationComplete,
+  onCancel,
+  isEmbedded = false,
+  embeddedTitle,
+  preselectedHospitalId,
+  preselectedHospitalName,
+  preselectedDoctorId,
+  preselectedDoctorName,
 }) => {
   const { register, login, loginWithGoogle } = useAuth();
   const [selectedRole, setSelectedRole] = useState<'hospital' | 'doctor' | 'patient'>(defaultRole);
@@ -126,6 +143,28 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Field-level error validation mapping (User Requirement: error must pop up at that specific box!)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (fieldKey: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[fieldKey]) return prev;
+      const copy = { ...prev };
+      delete copy[fieldKey];
+      return copy;
+    });
+  };
+
+  const renderFieldError = (fieldKey: string) => {
+    if (!fieldErrors[fieldKey]) return null;
+    return (
+      <div id={`err-${fieldKey}`} className="mt-1.5 px-2.5 py-1 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 shadow-2xs">
+        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+        <span>{fieldErrors[fieldKey]}</span>
+      </div>
+    );
+  };
 
   // Pre-load Google Maps SDK on mount for instant geocoding and map rendering
   useEffect(() => {
@@ -225,7 +264,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   // Step 2: 'otp' (verify 6-digit OTP sent to email)
   // Step 3: 'form' (fill in complete profile details once email authenticated)
   const [registrationStep, setRegistrationStep] = useState<'auth' | 'otp' | 'form'>(
-    initialGoogleAccount?.email ? 'form' : 'auth'
+    isEmbedded ? 'form' : (initialGoogleAccount?.email ? 'form' : 'auth')
   );
   const [inputEmail, setInputEmail] = useState('');
   const [otpInput, setOtpInput] = useState('');
@@ -237,6 +276,13 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+
+  // Synchronize role and preselected values if embedded or props change
+  useEffect(() => {
+    if (defaultRole) {
+      setSelectedRole(defaultRole);
+    }
+  }, [defaultRole]);
 
   // Handle incoming prefilled Google account
   useEffect(() => {
@@ -447,8 +493,14 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   const [docSpecSearch, setDocSpecSearch] = useState('');
   const [docSubSpecialties, setDocSubSpecialties] = useState<string[]>([]);
   const [docNewSubSpecialty, setDocNewSubSpecialty] = useState('');
-  const [docSelectedHospitalId, setDocSelectedHospitalId] = useState('');
+  const [docSelectedHospitalId, setDocSelectedHospitalId] = useState(preselectedHospitalId || '');
   const [docHospitalSearch, setDocHospitalSearch] = useState('');
+
+  useEffect(() => {
+    if (preselectedHospitalId) {
+      setDocSelectedHospitalId(preselectedHospitalId);
+    }
+  }, [preselectedHospitalId]);
   
   // Education & Credentials
   const [docHighestDegree, setDocHighestDegree] = useState('MBBS');
@@ -1014,65 +1066,64 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
     setError(null);
     setSuccessMessage(null);
 
-    // Basic common validations
+    // Comprehensive Field-level inline validation (User Requirement: error must pop up at that specific box, not at the top of the page!)
+    const errs: Record<string, string> = {};
+
     if (!email || !email.includes('@')) {
-      setError('Please provide a valid official email address.');
-      return;
+      errs['email'] = 'Please fill in this field with a valid official email address.';
+    }
+    if (!phone || !phone.trim()) {
+      errs['phone'] = 'Please fill in this field.';
     }
 
-    // Mandatory Trust & Compliance Documents Enforcement (Part 2)
     if (selectedRole === 'hospital') {
-      if (!hospLicenseFile) {
-        setError('❌ Clinical Establishment Act Registration document is mandatory. Please upload.');
-        return;
-      }
-      if (!hospAccreditationFile) {
-        setError('❌ NABH Accreditation Certificate document is mandatory. Please upload.');
-        return;
-      }
-      if (!hospPanGstFile) {
-        setError('❌ Hospital PAN Card & GSTIN document is mandatory. Please upload.');
-        return;
-      }
-      if (!hospFireNocFile) {
-        setError('❌ Fire Safety NOC certificate is mandatory. Please upload.');
-        return;
-      }
-      if (!hospPcbFile) {
-        setError('❌ Pollution Control Board (Biomedical Waste) License is mandatory. Please upload.');
-        return;
-      }
-      if (!hospLogoFile) {
-        setError('❌ Official Hospital Logo is mandatory. Please upload your hospital logo.');
-        return;
-      }
-      if (!hospNodalName.trim()) {
-        setError('Please enter the designated Nodal Officer / Medical Superintendent name.');
-        return;
-      }
+      if (!hospName || !hospName.trim()) errs['hospName'] = 'Please fill in this field.';
+      if (!hospLicense.trim() && !hospCeaRegNo.trim()) errs['hospLicense'] = 'Please fill in this field.';
+      if (!hospAddress || !hospAddress.trim()) errs['hospAddress'] = 'Please fill in this field.';
+      if (!hospPincode || hospPincode.trim().length !== 6) errs['hospPincode'] = 'Please enter a valid 6-digit Indian PIN code.';
+      if (!hospNodalName.trim() && !hospAdminRep.trim()) errs['hospNodalName'] = 'Please fill in this field.';
+      if (!hospLicenseFile) errs['hospLicenseFile'] = 'Please upload this required document.';
+      if (!hospAccreditationFile) errs['hospAccreditationFile'] = 'Please upload this required document.';
+      if (!hospPanGstFile) errs['hospPanGstFile'] = 'Please upload this required document.';
+      if (!hospFireNocFile) errs['hospFireNocFile'] = 'Please upload this required document.';
+      if (!hospPcbFile) errs['hospPcbFile'] = 'Please upload this required document.';
+      if (!hospLogoFile) errs['hospLogoFile'] = 'Please upload official hospital logo.';
     } else if (selectedRole === 'doctor') {
-      if (!docGovtIdFile) {
-        setError('❌ Doctor Government ID / Aadhaar document is mandatory. Please upload.');
-        return;
-      }
-      if (!docLicenseFile) {
-        setError('❌ Medical Council Registration Certificate document is mandatory. Please upload.');
-        return;
-      }
-      if (!docDegreeFile) {
-        setError('❌ Highest Medical Degree Certificate is mandatory. Please upload.');
-        return;
-      }
+      if (!name || !name.trim()) errs['name'] = 'Please fill in this field.';
+      if (!docLicense || !docLicense.trim()) errs['docLicense'] = 'Please fill in this field.';
+      if (!docGovtIdNumber || !docGovtIdNumber.trim()) errs['docGovtIdNumber'] = 'Please fill in this field.';
+      if (!docSelectedHospitalId && !preselectedHospitalId) errs['docSelectedHospitalId'] = 'Please select an affiliated hospital from the directory.';
+      if (!docCollege || !docCollege.trim()) errs['docCollege'] = 'Please fill in this field.';
+      if (!docPassingYear || !docPassingYear.trim()) errs['docPassingYear'] = 'Please fill in this field.';
+      if (!docFee) errs['docFee'] = 'Please fill in this field.';
+      if (!docGovtIdFile) errs['docGovtIdFile'] = 'Please upload doctor Government ID / Aadhaar document.';
+      if (!docLicenseFile) errs['docLicenseFile'] = 'Please upload Medical Council Registration Certificate.';
+      if (!docDegreeFile) errs['docDegreeFile'] = 'Please upload Highest Medical Degree Certificate.';
     } else if (selectedRole === 'patient') {
-      if (!patAadharFile) {
-        setError('❌ Aadhaar Card document is mandatory for patient clinical registration. Please upload.');
-        return;
-      }
-      const validContacts = patEmergencyContacts.filter(c => c.name.trim() && c.phone.trim());
+      if (!name || !name.trim()) errs['name'] = 'Please fill in this field.';
+      if (!patAadharNumber || !patAadharNumber.trim()) errs['patAadharNumber'] = 'Please fill in this field.';
+      if (!patAadharFile) errs['patAadharFile'] = 'Please upload Aadhaar Card document (Image or PDF).';
+      if (!patStreet || !patStreet.trim()) errs['patStreet'] = 'Please fill in this field.';
+      if (!patPincode || patPincode.trim().length !== 6) errs['patPincode'] = 'Please enter a valid 6-digit PIN code.';
+      const validContacts = patEmergencyContacts.filter((c) => c.name.trim() && c.phone.trim());
       if (validContacts.length === 0) {
-        setError('❌ Please provide at least one Emergency Contact with Full Name and Phone Number.');
-        return;
+        errs['patEmergencyContacts'] = 'Please provide at least one Emergency Contact with Name and Phone.';
       }
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setError(null); // Clean: No banner at top of page!
+      const firstKey = Object.keys(errs)[0];
+      setTimeout(() => {
+        const el = document.querySelector(`[data-field="${firstKey}"]`) as HTMLElement;
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const inp = el.querySelector('input, select, textarea') as HTMLElement;
+          inp?.focus();
+        }
+      }, 100);
+      return;
     }
 
     setLoading(true);
@@ -1087,10 +1138,6 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
       };
 
       if (selectedRole === 'hospital') {
-        if (!hospName.trim()) throw new Error('Official Hospital Legal Name is required.');
-        if (!hospAddress.trim()) throw new Error('Complete hospital street address is required.');
-        if (!hospPincode.trim() || hospPincode.length !== 6) throw new Error('Valid 6-digit PIN code is required.');
-
         const computedTotalBeds = (
           (Number(hospGeneralBeds) || 0) +
           (Number(hospSemiPrivateBeds) || 0) +
@@ -1157,9 +1204,6 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
           logoUrl: hospLogoFile ? hospLogoFile.dataUrl : undefined,
         };
       } else if (selectedRole === 'doctor') {
-        if (!name.trim()) throw new Error('Doctor Full Name is required.');
-        if (!docLicense.trim()) throw new Error('Medical Council Registration Number is required.');
-
         const targetHospital = availableHospitals.find((h) => h.id === docSelectedHospitalId);
 
         payload.doctorData = {
@@ -1193,10 +1237,6 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
           bio: docBio.trim() || `Consultant Specialist in ${docSpecialization}. Areas of clinical focus include patient telemetry evaluation and comprehensive treatment planning.`,
         };
       } else if (selectedRole === 'patient') {
-        if (!name.trim()) throw new Error('Patient Full Name is required.');
-        if (!patAadharNumber.trim()) throw new Error('Aadhaar Card Number is mandatory for patient clinical registration.');
-        if (!patAadharFile) throw new Error('Please upload your Aadhaar Card document (Image or PDF). It is mandatory for identity verification.');
-
         const validContacts = patEmergencyContacts.filter(c => c.name.trim() && c.phone.trim());
         const primaryContact = validContacts[0] || {
           name: 'Emergency Contact',
@@ -1908,7 +1948,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
             {/* Row 1: Hospital Name & Category */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div data-field="hospName">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Official Hospital / Medical Center Name *
                 </label>
@@ -1916,10 +1956,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="text"
                   required
                   value={hospName}
-                  onChange={(e) => setHospName(e.target.value)}
+                  onChange={(e) => {
+                    setHospName(e.target.value);
+                    clearFieldError('hospName');
+                  }}
                   placeholder="e.g. Saint Jude Memorial Hospital & Research Institute"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none font-semibold text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-semibold text-slate-800 ${
+                    fieldErrors['hospName']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-amber-500'
+                  }`}
                 />
+                {renderFieldError('hospName')}
               </div>
 
               <div>
@@ -1941,7 +1989,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
             {/* Row 2: License Number & Accreditation */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div data-field="hospLicense">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Medical & Establishment License Number *
                 </label>
@@ -1949,13 +1997,21 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="text"
                   required
                   value={hospLicense}
-                  onChange={(e) => setHospLicense(e.target.value)}
+                  onChange={(e) => {
+                    setHospLicense(e.target.value);
+                    clearFieldError('hospLicense');
+                  }}
                   placeholder="e.g. HOSP-LIC-2026-9810 or CEA-REG-884"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none font-mono font-bold text-slate-900"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-mono font-bold text-slate-900 ${
+                    fieldErrors['hospLicense']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-amber-500'
+                  }`}
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
                   Required for doctor affiliation requests and emergency telemetry dispatching.
                 </p>
+                {renderFieldError('hospLicense')}
               </div>
 
               <div>
@@ -1975,7 +2031,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
             {/* Row 3: Official Contact Email, Phone & Emergency Hotline */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+              <div data-field="email">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Hospital Management Official Email *
                 </label>
@@ -1983,13 +2039,21 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearFieldError('email');
+                  }}
                   placeholder="management@hospital.org"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none font-mono text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-mono text-slate-800 ${
+                    fieldErrors['email']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-amber-500'
+                  }`}
                 />
+                {renderFieldError('email')}
               </div>
 
-              <div>
+              <div data-field="phone">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Contact Phone / Board *
                 </label>
@@ -1997,10 +2061,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    clearFieldError('phone');
+                  }}
                   placeholder="+1 (555) 345-6789"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none text-slate-800 ${
+                    fieldErrors['phone']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-amber-500'
+                  }`}
                 />
+                {renderFieldError('phone')}
               </div>
 
               <div>
@@ -2063,7 +2135,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </div>
 
                 {/* 2. Pincode with Auto-Fetch */}
-                <div>
+                <div data-field="hospPincode">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700">
                       Pin Code (6-Digits) *
@@ -2083,10 +2155,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     required
                     maxLength={6}
                     value={hospPincode}
-                    onChange={(e) => handlePincodeLookup(e.target.value)}
+                    onChange={(e) => {
+                      handlePincodeLookup(e.target.value);
+                      clearFieldError('hospPincode');
+                    }}
                     placeholder="e.g. 500001"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                    className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-mono font-bold focus:ring-2 outline-none ${
+                      fieldErrors['hospPincode']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-amber-500'
+                    }`}
                   />
+                  {renderFieldError('hospPincode')}
                 </div>
 
                 {/* 3. State Dropdown */}
@@ -2155,7 +2235,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </div>
 
                 {/* 6. Street Address */}
-                <div>
+                <div data-field="hospAddress">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Street Address & Medical Center Campus *
                   </label>
@@ -2163,10 +2243,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     type="text"
                     required
                     value={hospAddress}
-                    onChange={(e) => setHospAddress(e.target.value)}
+                    onChange={(e) => {
+                      setHospAddress(e.target.value);
+                      clearFieldError('hospAddress');
+                    }}
                     placeholder="e.g. Plot 42, Health Expressway, Phase 2"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+                    className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-semibold focus:ring-2 outline-none ${
+                      fieldErrors['hospAddress']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-amber-500'
+                    }`}
                   />
+                  {renderFieldError('hospAddress')}
                 </div>
               </div>
             </div>
@@ -2362,7 +2450,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
+                <div data-field="hospNodalName">
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                     Nodal Officer Full Name *
                   </label>
@@ -2373,10 +2461,16 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     onChange={(e) => {
                       setHospNodalName(e.target.value);
                       setHospAdminRep(e.target.value);
+                      clearFieldError('hospNodalName');
                     }}
                     placeholder="e.g. Dr. Eleanor Vance, Medical Superintendent"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+                    className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-semibold focus:ring-2 outline-none ${
+                      fieldErrors['hospNodalName']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-amber-500'
+                    }`}
                   />
+                  {renderFieldError('hospNodalName')}
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -2657,14 +2751,33 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Clinical Establishment Act */}
-                <div className="p-3.5 bg-white rounded-xl border border-amber-200 space-y-2">
+                <div
+                  data-field="hospLicenseFile"
+                  className={`p-3.5 bg-white rounded-xl border space-y-2 ${
+                    fieldErrors['hospLicenseFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-amber-200'
+                  }`}
+                >
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-800">
                       1. Clinical Establishment Act Registration *
                     </label>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      Enables "Verified" Badge
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHospLicenseFile({
+                          name: 'CEA_License_Certified.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '14 KB',
+                        });
+                        clearFieldError('hospLicenseFile');
+                      }}
+                      className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample Doc
+                    </button>
                   </div>
                   <input
                     type="text"
@@ -2673,6 +2786,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     onChange={(e) => {
                       setHospCeaRegNo(e.target.value);
                       setHospLicense(e.target.value);
+                      clearFieldError('hospLicense');
                     }}
                     placeholder="Reg No. e.g. CEA/TEL/2022/8821"
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-bold outline-none"
@@ -2680,7 +2794,10 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setHospLicenseFile, 'hospital_license')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setHospLicenseFile, 'hospital_license');
+                      clearFieldError('hospLicenseFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                   />
                   {hospLicenseFile && (
@@ -2688,17 +2805,37 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {hospLicenseFile.name} ({hospLicenseFile.size})
                     </span>
                   )}
+                  {renderFieldError('hospLicenseFile')}
                 </div>
 
                 {/* 2. NABH Accreditation */}
-                <div className="p-3.5 bg-white rounded-xl border border-amber-200 space-y-2">
+                <div
+                  data-field="hospAccreditationFile"
+                  className={`p-3.5 bg-white rounded-xl border space-y-2 ${
+                    fieldErrors['hospAccreditationFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-amber-200'
+                  }`}
+                >
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-800">
-                      2. NABH Accreditation Certificate
+                      2. NABH Accreditation Certificate *
                     </label>
-                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      Enables "NABH Accredited" Logo
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHospAccreditationFile({
+                          name: 'NABH_Accreditation_Gold.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '18 KB',
+                        });
+                        clearFieldError('hospAccreditationFile');
+                      }}
+                      className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample Doc
+                    </button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -2718,7 +2855,10 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setHospAccreditationFile, 'accreditation')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setHospAccreditationFile, 'accreditation');
+                      clearFieldError('hospAccreditationFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                   />
                   {hospAccreditationFile && (
@@ -2726,13 +2866,38 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {hospAccreditationFile.name} ({hospAccreditationFile.size})
                     </span>
                   )}
+                  {renderFieldError('hospAccreditationFile')}
                 </div>
 
                 {/* 3. Hospital PAN & GSTIN */}
-                <div className="p-3.5 bg-white rounded-xl border border-amber-200 space-y-2">
-                  <label className="text-xs font-bold text-slate-800 block">
-                    3. Hospital PAN Card & GSTIN (Legal Entity) *
-                  </label>
+                <div
+                  data-field="hospPanGstFile"
+                  className={`p-3.5 bg-white rounded-xl border space-y-2 ${
+                    fieldErrors['hospPanGstFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 block">
+                      3. Hospital PAN Card & GSTIN (Legal Entity) *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHospPanGstFile({
+                          name: 'Hospital_PAN_GSTIN.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '15 KB',
+                        });
+                        clearFieldError('hospPanGstFile');
+                      }}
+                      className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample Doc
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -2756,7 +2921,10 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setHospPanGstFile, 'pan_gst')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setHospPanGstFile, 'pan_gst');
+                      clearFieldError('hospPanGstFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                   />
                   {hospPanGstFile && (
@@ -2764,13 +2932,38 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {hospPanGstFile.name} ({hospPanGstFile.size})
                     </span>
                   )}
+                  {renderFieldError('hospPanGstFile')}
                 </div>
 
                 {/* 4. Fire Safety NOC */}
-                <div className="p-3.5 bg-white rounded-xl border border-amber-200 space-y-2">
-                  <label className="text-xs font-bold text-slate-800 block">
-                    4. Municipal Fire Safety NOC *
-                  </label>
+                <div
+                  data-field="hospFireNocFile"
+                  className={`p-3.5 bg-white rounded-xl border space-y-2 ${
+                    fieldErrors['hospFireNocFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 block">
+                      4. Municipal Fire Safety NOC *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHospFireNocFile({
+                          name: 'Fire_Safety_NOC_Govt.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '12 KB',
+                        });
+                        clearFieldError('hospFireNocFile');
+                      }}
+                      className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample Doc
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -2791,7 +2984,10 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setHospFireNocFile, 'fire_noc')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setHospFireNocFile, 'fire_noc');
+                      clearFieldError('hospFireNocFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                   />
                   {hospFireNocFile && (
@@ -2799,13 +2995,38 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {hospFireNocFile.name} ({hospFireNocFile.size})
                     </span>
                   )}
+                  {renderFieldError('hospFireNocFile')}
                 </div>
 
                 {/* 5. Pollution Control Board License */}
-                <div className="p-3.5 bg-white rounded-xl border border-amber-200 space-y-2">
-                  <label className="text-xs font-bold text-slate-800 block">
-                    5. Pollution Control Board (Biomedical Waste) License *
-                  </label>
+                <div
+                  data-field="hospPcbFile"
+                  className={`p-3.5 bg-white rounded-xl border space-y-2 ${
+                    fieldErrors['hospPcbFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 block">
+                      5. Pollution Control Board (Biomedical Waste) License *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHospPcbFile({
+                          name: 'Pollution_Control_Board_License.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '16 KB',
+                        });
+                        clearFieldError('hospPcbFile');
+                      }}
+                      className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample Doc
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -2826,7 +3047,10 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setHospPcbFile, 'pcb_license')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setHospPcbFile, 'pcb_license');
+                      clearFieldError('hospPcbFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                   />
                   {hospPcbFile && (
@@ -2834,17 +3058,45 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {hospPcbFile.name} ({hospPcbFile.size})
                     </span>
                   )}
+                  {renderFieldError('hospPcbFile')}
                 </div>
 
                 {/* 6. Hospital Official Logo */}
-                <div className="p-3.5 bg-white rounded-xl border border-amber-200 space-y-2">
-                  <label className="text-xs font-bold text-slate-800 block">
-                    6. Official Hospital Logo / Emblem
-                  </label>
+                <div
+                  data-field="hospLogoFile"
+                  className={`p-3.5 bg-white rounded-xl border space-y-2 ${
+                    fieldErrors['hospLogoFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 block">
+                      6. Official Hospital Logo / Emblem *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHospLogoFile({
+                          name: 'Hospital_Official_Logo.png',
+                          type: 'image/png',
+                          dataUrl: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=256&q=80',
+                          size: '22 KB',
+                        });
+                        clearFieldError('hospLogoFile');
+                      }}
+                      className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample Logo
+                    </button>
+                  </div>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleFileUpload(e, setHospLogoFile, 'hospital_logo')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setHospLogoFile, 'hospital_logo');
+                      clearFieldError('hospLogoFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                   />
                   {hospLogoFile && (
@@ -2852,6 +3104,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {hospLogoFile.name} ({hospLogoFile.size})
                     </span>
                   )}
+                  {renderFieldError('hospLogoFile')}
                 </div>
               </div>
             </div>
@@ -2882,7 +3135,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
             {/* Row 1: Professional Identity - Name, Email, Gender, Phone */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="md:col-span-2">
+              <div className="md:col-span-2" data-field="name">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Doctor Full Name (As Registered with Medical Council) *
                 </label>
@@ -2890,13 +3143,21 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    clearFieldError('name');
+                  }}
                   placeholder="e.g. Dr. Rohan Sharma, MBBS, MD"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-semibold text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-semibold text-slate-800 ${
+                    fieldErrors['name']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
                 />
+                {renderFieldError('name')}
               </div>
 
-              <div>
+              <div data-field="email">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Official Medical Email *
                 </label>
@@ -2904,10 +3165,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearFieldError('email');
+                  }}
                   placeholder="doctor@hospital.org"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-mono text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-mono text-slate-800 ${
+                    fieldErrors['email']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
                 />
+                {renderFieldError('email')}
               </div>
 
               <div>
@@ -2983,7 +3252,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </select>
               </div>
 
-              <div>
+              <div data-field="docLicense">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Medical Council Registration Number *
                 </label>
@@ -2991,10 +3260,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="text"
                   required
                   value={docLicense}
-                  onChange={(e) => setDocLicense(e.target.value)}
+                  onChange={(e) => {
+                    setDocLicense(e.target.value);
+                    clearFieldError('docLicense');
+                  }}
                   placeholder="e.g. KMC-2015-03-8821"
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-bold text-indigo-900"
+                  className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs focus:ring-2 outline-none font-mono font-bold text-indigo-900 ${
+                    fieldErrors['docLicense']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
                 />
+                {renderFieldError('docLicense')}
               </div>
 
               <div>
@@ -3114,7 +3391,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </div>
               </div>
 
-              <div>
+              <div data-field="docSelectedHospitalId">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-slate-700">
                     Affiliated Hospital Facility (Select to dispatch request) *
@@ -3146,8 +3423,15 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
                 <select
                   value={docSelectedHospitalId}
-                  onChange={(e) => setDocSelectedHospitalId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none font-semibold text-slate-800"
+                  onChange={(e) => {
+                    setDocSelectedHospitalId(e.target.value);
+                    clearFieldError('docSelectedHospitalId');
+                  }}
+                  className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs focus:ring-2 outline-none font-semibold text-slate-800 ${
+                    fieldErrors['docSelectedHospitalId']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
                 >
                   {(() => {
                     const filtered = availableHospitals.filter((h) => {
@@ -3168,6 +3452,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     ));
                   })()}
                 </select>
+                {renderFieldError('docSelectedHospitalId')}
 
                 {selectedDocHospital && (
                   <div className="mt-2 p-2 bg-indigo-100/70 rounded-lg text-[11px] text-indigo-950 flex flex-wrap gap-x-3 gap-y-1">
@@ -3208,7 +3493,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 />
               </div>
 
-              <div>
+              <div data-field="docCollege">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Graduating Medical College *
                 </label>
@@ -3216,10 +3501,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="text"
                   required
                   value={docCollege}
-                  onChange={(e) => setDocCollege(e.target.value)}
+                  onChange={(e) => {
+                    setDocCollege(e.target.value);
+                    clearFieldError('docCollege');
+                  }}
                   placeholder="AIIMS New Delhi / CMC Vellore"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none ${
+                    fieldErrors['docCollege']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
                 />
+                {renderFieldError('docCollege')}
               </div>
 
               <div>
@@ -3241,7 +3534,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
               <div>
                 <span className="text-xs font-bold text-slate-900 block flex items-center gap-1.5">
-                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                  <span className="text-emerald-700 font-bold text-base">₹</span>
                   Consultation Economics & Appointment Scheduling Logic *
                 </span>
                 <p className="text-[11px] text-slate-500">
@@ -3250,7 +3543,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
+                <div data-field="docFee">
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
                     First-Time OPD Fee (₹ INR) *
                   </label>
@@ -3259,9 +3552,17 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     min="0"
                     required
                     value={docFee}
-                    onChange={(e) => setDocFee(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none text-emerald-700"
+                    onChange={(e) => {
+                      setDocFee(e.target.value);
+                      clearFieldError('docFee');
+                    }}
+                    className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-mono font-bold focus:ring-2 outline-none text-emerald-700 ${
+                      fieldErrors['docFee']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-indigo-500'
+                    }`}
                   />
+                  {renderFieldError('docFee')}
                 </div>
 
                 <div>
@@ -3354,14 +3655,41 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1.5">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    Medical Council Registration Certificate *
-                  </label>
+                <div
+                  data-field="docLicenseFile"
+                  className={`p-3 bg-white rounded-xl border space-y-1.5 ${
+                    fieldErrors['docLicenseFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-indigo-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Medical Council Certificate *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocLicenseFile({
+                          name: 'Medical_Council_Certificate.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '14 KB',
+                        });
+                        clearFieldError('docLicenseFile');
+                      }}
+                      className="text-[10px] text-indigo-700 hover:text-indigo-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample
+                    </button>
+                  </div>
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setDocLicenseFile, 'medical_license')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setDocLicenseFile, 'medical_license');
+                      clearFieldError('docLicenseFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
                   />
                   {docLicenseFile && (
@@ -3369,16 +3697,44 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {docLicenseFile.name} ({docLicenseFile.size})
                     </span>
                   )}
+                  {renderFieldError('docLicenseFile')}
                 </div>
 
-                <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1.5">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    Highest Medical Degree Certificate (MBBS/MD/DM/DNB) *
-                  </label>
+                <div
+                  data-field="docDegreeFile"
+                  className={`p-3 bg-white rounded-xl border space-y-1.5 ${
+                    fieldErrors['docDegreeFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-indigo-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Highest Degree Certificate *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocDegreeFile({
+                          name: 'Doctor_MBBS_MD_Degree.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '16 KB',
+                        });
+                        clearFieldError('docDegreeFile');
+                      }}
+                      className="text-[10px] text-indigo-700 hover:text-indigo-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample
+                    </button>
+                  </div>
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setDocDegreeFile, 'degree')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setDocDegreeFile, 'degree');
+                      clearFieldError('docDegreeFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
                   />
                   {docDegreeFile && (
@@ -3386,16 +3742,44 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {docDegreeFile.name} ({docDegreeFile.size})
                     </span>
                   )}
+                  {renderFieldError('docDegreeFile')}
                 </div>
 
-                <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1.5">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    Aadhaar / National ID Document *
-                  </label>
+                <div
+                  data-field="docGovtIdFile"
+                  className={`p-3 bg-white rounded-xl border space-y-1.5 ${
+                    fieldErrors['docGovtIdFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-indigo-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Aadhaar / National ID *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocGovtIdFile({
+                          name: 'Doctor_Aadhaar_Card.pdf',
+                          type: 'application/pdf',
+                          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAEr5HIKWTAwAEI4AA5qAwUKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjExCmVuZG9iagoxIDAgb2JqCjw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWyAzIDAgUiBdIC9Db3VudCAxID4+CmVuZG9iagozIDAgb2JqCjw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFsgMCAwIDYxMiA3OTIgXSAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDEzNCAwMDAwMCBuIAowMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyNDQgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzM4CiUlRU9G',
+                          size: '12 KB',
+                        });
+                        clearFieldError('docGovtIdFile');
+                      }}
+                      className="text-[10px] text-indigo-700 hover:text-indigo-950 font-bold underline cursor-pointer"
+                    >
+                      Use Sample
+                    </button>
+                  </div>
                   <input
                     type="file"
                     accept="image/*,.pdf"
-                    onChange={(e) => handleFileUpload(e, setDocGovtIdFile, 'aadhar')}
+                    onChange={(e) => {
+                      handleFileUpload(e, setDocGovtIdFile, 'aadhar');
+                      clearFieldError('docGovtIdFile');
+                    }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
                   />
                   {docGovtIdFile && (
@@ -3403,6 +3787,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                       ✓ {docGovtIdFile.name} ({docGovtIdFile.size})
                     </span>
                   )}
+                  {renderFieldError('docGovtIdFile')}
                 </div>
               </div>
             </div>
@@ -4106,11 +4491,15 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 type="button"
                 onClick={() => {
                   setStatusPopup(null);
-                  if (onOpenSignIn) onOpenSignIn();
+                  if (onRegistrationComplete) {
+                    onRegistrationComplete();
+                  } else if (onOpenSignIn) {
+                    onOpenSignIn();
+                  }
                 }}
                 className="w-full py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                Understood / Go to Sign In
+                {isEmbedded ? 'Understood & Continue' : 'Understood / Go to Sign In'}
               </button>
             </div>
           </div>
