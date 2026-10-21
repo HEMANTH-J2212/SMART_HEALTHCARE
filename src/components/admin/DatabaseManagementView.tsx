@@ -599,7 +599,7 @@ service cloud.firestore {
 
                       {row.doctorProfile && (
                         <div className="text-indigo-700 font-medium">
-                          Lic: {row.doctorProfile.medicalLicenseNumber} • {row.doctorProfile.specialization} • Fee: ${row.doctorProfile.consultationFee}
+                          Lic: {row.doctorProfile.medicalLicenseNumber} • {row.doctorProfile.specialization} • Fee: ₹{row.doctorProfile.consultationFee}
                         </div>
                       )}
 
@@ -636,7 +636,7 @@ service cloud.firestore {
                       )}
 
                       {row.category && (
-                        <div>Category: {row.category} (${row.price}) • Stock: {row.stock}</div>
+                        <div>Category: {row.category} (₹{row.price}) • Stock: {row.stock}</div>
                       )}
                     </div>
                   </td>

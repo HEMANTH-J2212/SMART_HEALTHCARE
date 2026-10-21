@@ -73,7 +73,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [docPgDegree, setDocPgDegree] = useState(user?.doctorProfile?.pgDegree || '');
   const [docGradCollege, setDocGradCollege] = useState(user?.doctorProfile?.graduatingCollege || '');
   const [docPassYear, setDocPassYear] = useState(user?.doctorProfile?.passingYear || '');
-  const [docFee, setDocFee] = useState(user?.doctorProfile?.consultationFee || 70);
+  const [docFee, setDocFee] = useState(user?.doctorProfile?.consultationFee || 500);
   const [docExp, setDocExp] = useState(user?.doctorProfile?.yearsOfExperience || 8);
   const [docBio, setDocBio] = useState(user?.doctorProfile?.bio || '');
 
@@ -122,7 +122,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         setDocPgDegree(user.doctorProfile.pgDegree || '');
         setDocGradCollege(user.doctorProfile.graduatingCollege || '');
         setDocPassYear(user.doctorProfile.passingYear || '');
-        setDocFee(user.doctorProfile.consultationFee || 70);
+        setDocFee(user.doctorProfile.consultationFee || 500);
         setDocExp(user.doctorProfile.yearsOfExperience || 8);
         setDocBio(user.doctorProfile.bio || '');
       }
@@ -571,7 +571,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-slate-700 font-semibold mb-1">Consultation Fee ($ / ₹)</label>
+                      <label className="block text-slate-700 font-semibold mb-1">Consultation Fee (₹ INR)</label>
                       <input
                         type="number"
                         value={docFee}

@@ -56,6 +56,7 @@ import {
 import { api } from '../../services/api';
 import { PrescriptionModal } from '../prescriptions/PrescriptionModal';
 import { syncUserToFirestore } from '../../services/firestoreSync';
+import { RegistrationPageView } from '../registration/RegistrationPageView';
 import { INDIA_STATES, INDIA_DISTRICTS, fetchIndiaPincodeDetails } from '../../utils/indiaLocations';
 
 export const isAppointmentSlotCompleted = (dateStr: string, timeSlotStr: string): boolean => {
@@ -298,7 +299,7 @@ export const DoctorDashboard: React.FC = () => {
   const [completingOrderId, setCompletingOrderId] = useState<string | null>(null);
   const [completingOrderReportNotes, setCompletingOrderReportNotes] = useState('');
 
-  // Free Follow-Up Appointment after Diagnostic Lab Test ($0 Fee)
+  // Free Follow-Up Appointment after Diagnostic Lab Test (₹0 Fee)
   const [isFreeFollowUpModalOpen, setIsFreeFollowUpModalOpen] = useState(false);
   const [selectedOrderForFollowUp, setSelectedOrderForFollowUp] = useState<LabTestOrder | null>(null);
   const [freeFollowUpDate, setFreeFollowUpDate] = useState(() => {
@@ -740,7 +741,7 @@ export const DoctorDashboard: React.FC = () => {
     }
   };
 
-  // Handler 4: Book FREE Follow-Up Appointment after Lab Test ($0 Fee)
+  // Handler 4: Book FREE Follow-Up Appointment after Lab Test (₹0 Fee)
   const handleBookFreeFollowUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrderForFollowUp) return;
@@ -755,10 +756,10 @@ export const DoctorDashboard: React.FC = () => {
       await api.bookFreeFollowUp(selectedOrderForFollowUp.id, {
         date: freeFollowUpDate,
         timeSlot: freeFollowUpSlot,
-        followUpNotes: freeFollowUpNotes.trim() || 'Post-investigation clinical review and findings discussion ($0 Free Consultation).',
+        followUpNotes: freeFollowUpNotes.trim() || 'Post-investigation clinical review and findings discussion (₹0 Free Consultation).',
       });
 
-      setActionNotice(`🎉 Free follow-up appointment successfully booked for ${selectedOrderForFollowUp.patientName} on ${freeFollowUpDate} at ${freeFollowUpSlot}! Consultation fee waived ($0 Free Follow-Up).`);
+      setActionNotice(`🎉 Free follow-up appointment successfully booked for ${selectedOrderForFollowUp.patientName} on ${freeFollowUpDate} at ${freeFollowUpSlot}! Consultation fee waived (₹0 Free Follow-Up).`);
       setTimeout(() => setActionNotice(null), 8000);
       setIsFreeFollowUpModalOpen(false);
       setSelectedOrderForFollowUp(null);
@@ -1180,7 +1181,7 @@ export const DoctorDashboard: React.FC = () => {
               </div>
 
               <span className="text-xs text-indigo-200">
-                Consultation Fee: <strong className="text-white">${doctorProfile?.consultationFee ?? 50}</strong>
+                Consultation Fee: <strong className="text-white">₹{doctorProfile?.consultationFee ?? 500}</strong>
               </span>
 
               <span className="text-xs text-indigo-200">
@@ -1570,7 +1571,7 @@ export const DoctorDashboard: React.FC = () => {
                         {apt.isFreeFollowUp && (
                           <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full font-black text-[10px]">
                             <Sparkles className="w-3 h-3 text-emerald-600" />
-                            <span>100% FREE Follow-Up Investigation Consultation ($0 Waived)</span>
+                            <span>100% FREE Follow-Up Investigation Consultation (₹0 Waived)</span>
                           </div>
                         )}
                         {apt.referredByDoctorName && (
@@ -4250,442 +4251,27 @@ export const DoctorDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ================= DOCTOR REGISTER PATIENT MODAL ================= */}
+      {/* ================= VIEW: REGISTER PATIENT (Exact Same Page As Standalone Patient Registration) ================= */}
       {isRegisterPatientOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
-                  <UserIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Register Patient & Dispatch Hospital Request</h3>
-                  <p className="text-xs text-slate-500">
-                    Register clinical records and assign target hospital facility with license verification.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsRegisterPatientOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleDoctorRegisterPatientSubmit} className="space-y-4 pt-4 text-xs">
-              
-              {/* Target Hospital Selector (Requirement: Doctor chooses hospital, includes hospital license and ID) */}
-              <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block font-bold text-indigo-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-indigo-700" />
-                    Target Hospital for Patient Admission / Care Request *
-                  </label>
-                  <span className="text-[10px] text-indigo-700 font-semibold">License Verified</span>
-                </div>
-
-                <select
-                  value={patientRegHospitalId}
-                  onChange={(e) => setPatientRegHospitalId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                >
-                  {hospitals.map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {h.hospitalProfile?.hospitalName || h.name} (License: {h.hospitalProfile?.licenseNumber || 'REG-LIC'})
-                    </option>
-                  ))}
-                </select>
-
-                {(() => {
-                  const hospObj = hospitals.find((h) => h.id === patientRegHospitalId);
-                  if (!hospObj) return null;
-                  return (
-                    <div className="pt-1 text-[11px] text-indigo-900 grid grid-cols-1 sm:grid-cols-3 gap-2 border-t border-indigo-200/60 mt-1">
-                      <div>
-                        <span className="text-slate-500">Hospital ID:</span>{' '}
-                        <strong className="font-mono text-indigo-950">{hospObj.id}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">License #:</span>{' '}
-                        <strong className="font-mono text-indigo-950">{hospObj.hospitalProfile?.licenseNumber || 'N/A'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Hotline:</span>{' '}
-                        <strong className="text-indigo-950">{hospObj.hospitalProfile?.emergencyHotline || hospObj.phone}</strong>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Patient Basic Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Full Patient Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={patientRegName}
-                    onChange={(e) => setPatientRegName(e.target.value)}
-                    placeholder="e.g. Michael Smith"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Patient Email Address *</label>
-                  <input
-                    type="email"
-                    required
-                    value={patientRegEmail}
-                    onChange={(e) => setPatientRegEmail(e.target.value)}
-                    placeholder="patient@example.com"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Contact Phone *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={patientRegPhone}
-                    onChange={(e) => setPatientRegPhone(e.target.value)}
-                    placeholder="+1 (555) 765-4321"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* Govt ID & Demographics */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Govt ID Type *</label>
-                  <select
-                    value={patientRegGovtIdType}
-                    onChange={(e) => setPatientRegGovtIdType(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                  >
-                    <option value="Aadhar Card">Aadhar Card</option>
-                    <option value="Passport">Passport</option>
-                    <option value="Driver License">Driver License</option>
-                    <option value="Voter ID">Voter ID</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Govt ID Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={patientRegGovtIdNumber}
-                    onChange={(e) => setPatientRegGovtIdNumber(e.target.value)}
-                    placeholder="8492 1029 3321"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Date of Birth *</label>
-                  <input
-                    type="date"
-                    required
-                    value={patientRegDob}
-                    onChange={(e) => setPatientRegDob(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Gender & Blood *</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <select
-                      value={patientRegGender}
-                      onChange={(e) => setPatientRegGender(e.target.value)}
-                      className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                    >
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <select
-                      value={patientRegBloodGroup}
-                      onChange={(e) => setPatientRegBloodGroup(e.target.value)}
-                      className="w-full px-1.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none font-bold text-rose-700"
-                    >
-                      {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
-                        <option key={bg} value={bg}>{bg}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Physical & Clinical Conditions */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Height (cm)</label>
-                  <input
-                    type="number"
-                    value={patientRegHeight}
-                    onChange={(e) => setPatientRegHeight(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Weight (kg)</label>
-                  <input
-                    type="number"
-                    value={patientRegWeight}
-                    onChange={(e) => setPatientRegWeight(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-slate-700 font-semibold mb-1">Medical Conditions (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={patientRegConditions}
-                    onChange={(e) => setPatientRegConditions(e.target.value)}
-                    placeholder="Hypertension, Asthma"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* India Geographic Location Selector (User Requirement: India only, Country, State, District, Pincode, City, Street) */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-indigo-600" />
-                    Residential Address (India Only) *
-                  </span>
-                  <span className="text-[10px] text-indigo-700 font-semibold bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                    Auto-fetch supported
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-600 font-medium mb-1">Country</label>
-                    <select
-                      value={patientRegCountry}
-                      onChange={(e) => setPatientRegCountry(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
-                    >
-                      <option value="India">India (IN)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-600 font-medium mb-1">State *</label>
-                    <select
-                      value={patientRegState}
-                      onChange={(e) => {
-                        const newState = e.target.value;
-                        setPatientRegState(newState);
-                        const dists = INDIA_DISTRICTS[newState] || [];
-                        if (dists.length > 0) setPatientRegDistrict(dists[0]);
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
-                    >
-                      {INDIA_STATES.map((st) => (
-                        <option key={st} value={st}>{st}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-600 font-medium mb-1">District *</label>
-                    <select
-                      value={patientRegDistrict}
-                      onChange={(e) => setPatientRegDistrict(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
-                    >
-                      {(INDIA_DISTRICTS[patientRegState] || ['Central', 'North', 'South']).map((d) => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-600 font-medium mb-1 flex items-center justify-between">
-                      <span>Pincode (6 digits) *</span>
-                      {patientRegPincodeFetching && <span className="text-[10px] text-indigo-600 animate-pulse">Fetching...</span>}
-                    </label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={patientRegPincode}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                          setPatientRegPincode(val);
-                          if (val.length === 6) handlePatientPincodeLookup(val);
-                        }}
-                        placeholder="500001"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handlePatientPincodeLookup(patientRegPincode)}
-                        disabled={patientRegPincode.length !== 6 || patientRegPincodeFetching}
-                        className="px-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[10px] font-bold shrink-0 cursor-pointer disabled:opacity-50"
-                      >
-                        Auto-fill
-                      </button>
-                    </div>
-                    {patientRegPincodeNotice && (
-                      <p className="text-[10px] text-indigo-600 mt-1 font-medium">{patientRegPincodeNotice}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-600 font-medium mb-1">City / Town *</label>
-                    <input
-                      type="text"
-                      required
-                      value={patientRegCity}
-                      onChange={(e) => setPatientRegCity(e.target.value)}
-                      placeholder="e.g. Hyderabad"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-600 font-medium mb-1">Street Address / House No.</label>
-                    <input
-                      type="text"
-                      value={patientRegStreetAddress}
-                      onChange={(e) => setPatientRegStreetAddress(e.target.value)}
-                      placeholder="e.g. Flat 302, Green Avenue"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Mandatory Aadhaar / Government ID Document Upload (User Requirement) */}
-              <div className="p-3.5 bg-rose-50/60 border border-rose-200 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-rose-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                    <Upload className="w-4 h-4 text-rose-600" />
-                    Government ID / Aadhaar Document Upload (Mandatory) *
-                  </label>
-                  <span className="text-[10px] text-rose-700 font-bold px-2 py-0.5 bg-rose-100 rounded-full">
-                    Required for Registration
-                  </span>
-                </div>
-
-                <div className="p-3 bg-white border-2 border-dashed border-rose-300 rounded-xl flex flex-col items-center justify-center text-center">
-                  <input
-                    type="file"
-                    id="doctor-pat-id-file"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          setPatientRegGovtIdFile({
-                            name: file.name,
-                            type: file.type,
-                            dataUrl: reader.result as string,
-                            size: (file.size / 1024).toFixed(1) + ' KB',
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                  {patientRegGovtIdFile ? (
-                    <div className="flex items-center justify-between w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-800">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-emerald-600" />
-                        <span className="font-semibold text-xs truncate max-w-[240px]">{patientRegGovtIdFile.name}</span>
-                        <span className="text-[10px] text-emerald-600 font-mono">({patientRegGovtIdFile.size})</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setPatientRegGovtIdFile(null)}
-                        className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <label
-                      htmlFor="doctor-pat-id-file"
-                      className="cursor-pointer flex flex-col items-center gap-1 py-1 text-slate-600 hover:text-indigo-600"
-                    >
-                      <Upload className="w-6 h-6 text-rose-500" />
-                      <span className="text-xs font-bold text-slate-800">Click to upload Aadhaar or Govt ID</span>
-                      <span className="text-[10px] text-slate-400">PDF, JPG, PNG up to 10MB</span>
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Emergency Contact */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Emergency Contact Name</label>
-                  <input
-                    type="text"
-                    value={patientRegEmergencyName}
-                    onChange={(e) => setPatientRegEmergencyName(e.target.value)}
-                    placeholder="Sarah Smith"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Relationship</label>
-                  <input
-                    type="text"
-                    value={patientRegEmergencyRel}
-                    onChange={(e) => setPatientRegEmergencyRel(e.target.value)}
-                    placeholder="Spouse"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Emergency Phone</label>
-                  <input
-                    type="tel"
-                    value={patientRegEmergencyPhone}
-                    onChange={(e) => setPatientRegEmergencyPhone(e.target.value)}
-                    placeholder="+1 (555) 999-0000"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setIsRegisterPatientOpen(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-200"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={patientRegSubmitting}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{patientRegSubmitting ? 'Registering Patient...' : 'Register Patient & Dispatch to Hospital'}</span>
-                </button>
-              </div>
-
-            </form>
+        <div className="fixed inset-0 z-50 bg-slate-50/95 backdrop-blur-md overflow-y-auto overscroll-contain animate-in fade-in">
+          <div className="max-w-6xl mx-auto px-4 py-8">
+            <RegistrationPageView
+              defaultRole="patient"
+              lockRole={true}
+              isEmbedded={true}
+              embeddedTitle="Register Patient Record"
+              preselectedDoctorId={user?.id}
+              preselectedDoctorName={user?.name}
+              preselectedHospitalId={user?.doctorProfile?.hospitalId}
+              preselectedHospitalName={user?.doctorProfile?.hospitalName}
+              onCancel={() => setIsRegisterPatientOpen(false)}
+              onRegistrationComplete={(createdPatient) => {
+                setIsRegisterPatientOpen(false);
+                setActionNotice(`✅ Patient "${createdPatient?.name || "Patient"}" registered successfully!`);
+                setTimeout(() => setActionNotice(null), 6000);
+                loadData();
+              }}
+            />
           </div>
         </div>
       )}
@@ -5076,7 +4662,7 @@ export const DoctorDashboard: React.FC = () => {
                           {doc.doctorProfile?.specialization || 'Specialist Physician'}
                         </p>
                         <p className="text-[10px] text-slate-500">
-                          Fee: ${doc.doctorProfile?.consultationFee || 75} • {doc.doctorProfile?.yearsOfExperience || 10}+ yrs exp
+                          Fee: ₹{doc.doctorProfile?.consultationFee || 500} • {doc.doctorProfile?.yearsOfExperience || 10}+ yrs exp
                         </p>
                       </div>
                       <button
@@ -5196,7 +4782,7 @@ export const DoctorDashboard: React.FC = () => {
                   Hospital Diagnostic Lab Orders & Free Follow-Up Booking
                 </h2>
                 <p className="text-xs text-slate-500 max-w-3xl mt-1">
-                  As an attending doctor (Orthopedic, Cardiologist, Neurologist, etc.), order hospital-available diagnostic imaging (MRI, CT, X-Ray) or laboratory profiles. Once the tests are carried out, the system lets you book the patient's next follow-up appointment completely free ($0 Fee).
+                  As an attending doctor (Orthopedic, Cardiologist, Neurologist, etc.), order hospital-available diagnostic imaging (MRI, CT, X-Ray) or laboratory profiles. Once the tests are carried out, the system lets you book the patient's next follow-up appointment completely free (₹0 Fee).
                 </p>
               </div>
 
@@ -5313,7 +4899,7 @@ export const DoctorDashboard: React.FC = () => {
                             className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                           >
                             <Sparkles className="w-4 h-4 text-emerald-200" />
-                            <span>Book FREE Follow-Up ($0 Fee)</span>
+                            <span>Book FREE Follow-Up (₹0 Fee)</span>
                           </button>
                         )}
 
@@ -5397,7 +4983,7 @@ export const DoctorDashboard: React.FC = () => {
                   <option value="">-- Choose Colleague Doctor --</option>
                   {hospitalDoctors.map((doc) => (
                     <option key={doc.id} value={doc.id}>
-                      {doc.name} — {doc.doctorProfile?.specialization || 'Specialist'} (${doc.doctorProfile?.consultationFee || 75})
+                      {doc.name} — {doc.doctorProfile?.specialization || 'Specialist'} (₹{doc.doctorProfile?.consultationFee || 500})
                     </option>
                   ))}
                 </select>
@@ -5587,7 +5173,7 @@ export const DoctorDashboard: React.FC = () => {
               </div>
 
               <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl text-[11px] text-teal-950 leading-relaxed">
-                ✨ <strong>Free Follow-Up Guarantee:</strong> Once this diagnostic order is completed by the laboratory, you will be able to book the patient's next review consultation for <strong>FREE ($0 Fee)</strong>.
+                ✨ <strong>Free Follow-Up Guarantee:</strong> Once this diagnostic order is completed by the laboratory, you will be able to book the patient's next review consultation for <strong>FREE (₹0 Fee)</strong>.
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
@@ -5613,7 +5199,7 @@ export const DoctorDashboard: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: BOOK 100% FREE FOLLOW-UP APPOINTMENT ($0 FEE) */}
+      {/* MODAL 3: BOOK 100% FREE FOLLOW-UP APPOINTMENT (₹0 FEE) */}
       {/* ========================================================================= */}
       {isFreeFollowUpModalOpen && selectedOrderForFollowUp && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto animate-in fade-in">
@@ -5625,7 +5211,7 @@ export const DoctorDashboard: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    Book FREE Follow-Up Appointment ($0 Fee)
+                    Book FREE Follow-Up Appointment (₹0 Fee)
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     Post-investigation consultation fee is 100% waived
@@ -5726,7 +5312,7 @@ export const DoctorDashboard: React.FC = () => {
                   className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white font-bold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-emerald-200" />
-                  <span>{freeFollowUpSubmitting ? 'Booking Free Follow-Up...' : 'Confirm Free Follow-Up ($0 Fee)'}</span>
+                  <span>{freeFollowUpSubmitting ? 'Booking Free Follow-Up...' : 'Confirm Free Follow-Up (₹0 Fee)'}</span>
                 </button>
               </div>
             </form>
@@ -5765,7 +5351,7 @@ export const DoctorDashboard: React.FC = () => {
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 outline-none"
               />
               <p className="text-[11px] text-slate-500">
-                Once marked completed, you will be able to book the patient's next consultation for <strong>free ($0 Fee)</strong>.
+                Once marked completed, you will be able to book the patient's next consultation for <strong>free (₹0 Fee)</strong>.
               </p>
             </div>
 

@@ -11,10 +11,12 @@ import {
   Car,
   ChevronDown,
   Activity,
-  Database
+  Database,
+  Rocket
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
+import { LiveDeployModal } from './LiveDeployModal';
 
 interface HeaderProps {
   onOpenAuth: (mode: 'login' | 'register') => void;
@@ -33,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user, isAuthenticated, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -224,10 +227,21 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </nav>
 
-          {/* Right Area: Emergency Hotline & User Menu */}
-          <div className="flex items-center gap-3">
+          {/* Right Area: Share/Deploy Live, Emergency Hotline & User Menu */}
+          <div className="flex items-center gap-2.5">
+            {/* Share / Deploy Live Button */}
+            <button
+              type="button"
+              onClick={() => setIsDeployModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Share Public Link, QR Code & Deploy Live"
+            >
+              <Rocket className="w-3.5 h-3.5 text-teal-700" />
+              <span className="hidden sm:inline">Deploy & Share Live</span>
+            </button>
+
             {/* Emergency 24/7 Hotline Badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+            <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
               <span>24/7 ER: 1-800-555-9111</span>
             </div>
@@ -355,6 +369,12 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Live Deploy & Share Modal */}
+      <LiveDeployModal
+        isOpen={isDeployModalOpen}
+        onClose={() => setIsDeployModalOpen(false)}
+      />
     </header>
   );
 };

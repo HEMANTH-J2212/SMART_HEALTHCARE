@@ -34,7 +34,6 @@ import {
   Check,
   Flame,
   ShieldAlert,
-  DollarSign,
   IndianRupee,
   Calendar,
   AlertTriangle,
@@ -284,7 +283,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
     }
   }, [defaultRole]);
 
-  // Handle incoming prefilled Google account
+  // Handle incoming prefilled Google account or embedded mode
   useEffect(() => {
     if (initialGoogleAccount?.email) {
       setLinkedGoogleAccount(initialGoogleAccount);
@@ -292,20 +291,24 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
       setInputEmail(initialGoogleAccount.email);
       if (initialGoogleAccount.name) setName(initialGoogleAccount.name);
       setRegistrationStep('form');
+    } else if (isEmbedded) {
+      setRegistrationStep('form');
     } else {
       setRegistrationStep('auth');
     }
-  }, [initialGoogleAccount]);
+  }, [initialGoogleAccount, isEmbedded]);
 
   const handleRoleChange = (role: 'hospital' | 'doctor' | 'patient') => {
     setSelectedRole(role);
     setError(null);
     setSuccessMessage(null);
     // If email is not yet authenticated, keep user on Stage 1 (the Sign Up page) for that role
-    if (!email && !linkedGoogleAccount) {
+    if (!email && !linkedGoogleAccount && !isEmbedded) {
       setRegistrationStep('auth');
     }
   };
+
+  const [lastRegisteredUser, setLastRegisteredUser] = useState<User | null>(null);
 
   // Status / Notice Popup Modal
   const [statusPopup, setStatusPopup] = useState<{
@@ -1248,8 +1251,8 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
           govtIdType: 'Aadhar Card',
           govtIdNumber: patAadharNumber.trim(),
           aadharNumber: patAadharNumber.trim(),
-          aadharDocumentUrl: patAadharFile.dataUrl,
-          aadharDocumentName: patAadharFile.name,
+          aadharDocumentUrl: patAadharFile?.dataUrl,
+          aadharDocumentName: patAadharFile?.name,
           additionalDocType: patAdditionalDocType !== 'None' ? patAdditionalDocType : undefined,
           additionalDocNumber: patAdditionalDocNumber.trim() || undefined,
           additionalDocUrl: patAdditionalDocFile?.dataUrl,
@@ -1390,9 +1393,38 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
       }
       payload.uploadedDocuments = uploadedDocs;
 
-      const regResult = await register(payload);
-      if (regResult?.user) {
-        syncUserToFirestore(regResult.user).catch((e) => console.warn('Firestore sync note:', e));
+      const regResult = isEmbedded ? await api.register(payload) : await register(payload);
+      let finalRegisteredUser: User | undefined = regResult?.user;
+
+      if (isEmbedded && finalRegisteredUser) {
+        if (selectedRole === 'hospital') {
+          try {
+            const approved = await api.verifyHospital(finalRegisteredUser.id, 'approve');
+            if (approved?.hospital) finalRegisteredUser = approved.hospital;
+          } catch (e) {
+            console.warn('Auto-approve hospital note:', e);
+          }
+        } else if (selectedRole === 'doctor' && (preselectedHospitalId || docSelectedHospitalId)) {
+          try {
+            const targetHospId = preselectedHospitalId || docSelectedHospitalId;
+            const approved = await api.approveDoctor(targetHospId, finalRegisteredUser.id, 'approve');
+            if (approved?.doctor) finalRegisteredUser = approved.doctor;
+          } catch (e) {
+            console.warn('Auto-approve doctor note:', e);
+          }
+        }
+      }
+
+      if (finalRegisteredUser) {
+        setLastRegisteredUser(finalRegisteredUser);
+        syncUserToFirestore(finalRegisteredUser).catch((e) => console.warn('Firestore sync note:', e));
+      }
+
+      if (isEmbedded) {
+        if (onRegistrationComplete) {
+          onRegistrationComplete(finalRegisteredUser);
+        }
+        return;
       }
 
       if (selectedRole === 'hospital') {
@@ -1418,7 +1450,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
           `🎉 Registration complete! Your Patient account has been securely provisioned. Your access credentials and password have been dispatched to your email (${email}).`
         );
         if (onRegistrationComplete) {
-          onRegistrationComplete();
+          onRegistrationComplete(finalRegisteredUser);
         }
       }
     } catch (err: any) {
@@ -1455,7 +1487,38 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
         });
         return;
       }
-      setError(errMsg || 'Registration failed. Please check your information.');
+
+      // User Requirement: Error must pop up at that specific box, NOT at the top of the page!
+      const errLower = errMsg.toLowerCase();
+      if (errLower.includes('email')) {
+        setFieldErrors({ email: errMsg });
+        const el = document.querySelector('[data-field="email"]') as HTMLElement;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (errLower.includes('phone') || errLower.includes('mobile')) {
+        setFieldErrors({ phone: errMsg });
+        const el = document.querySelector('[data-field="phone"]') as HTMLElement;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (errLower.includes('license') || errLower.includes('council')) {
+        const key = selectedRole === 'hospital' ? 'hospLicense' : 'docLicense';
+        setFieldErrors({ [key]: errMsg });
+        const el = document.querySelector(`[data-field="${key}"]`) as HTMLElement;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (errLower.includes('name') || errLower.includes('hospital name')) {
+        const key = selectedRole === 'hospital' ? 'hospName' : 'name';
+        setFieldErrors({ [key]: errMsg });
+        const el = document.querySelector(`[data-field="${key}"]`) as HTMLElement;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (errLower.includes('pincode') || errLower.includes('pin')) {
+        const key = selectedRole === 'hospital' ? 'hospPincode' : 'patPincode';
+        setFieldErrors({ [key]: errMsg });
+        const el = document.querySelector(`[data-field="${key}"]`) as HTMLElement;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        const fallbackKey = selectedRole === 'hospital' ? 'hospName' : 'name';
+        setFieldErrors({ [fallbackKey]: errMsg || 'Please check and fill in this field.' });
+        const el = document.querySelector(`[data-field="${fallbackKey}"]`) as HTMLElement;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     } finally {
       setLoading(false);
     }
@@ -1466,123 +1529,152 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
       
       {/* Top Hero Banner */}
       <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-indigo-950 rounded-2xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-500/20 border border-teal-400/30 rounded-full text-xs font-semibold text-teal-200 mb-3">
-            <HeartPulse className="w-4 h-4 text-teal-300" />
-            <span>Official Ecosystem Registration Portal</span>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-500/20 border border-teal-400/30 rounded-full text-xs font-semibold text-teal-200 mb-3">
+              <HeartPulse className="w-4 h-4 text-teal-300" />
+              <span>
+                {selectedRole === 'hospital'
+                  ? 'Official Hospital Facility Registration & Licensing Portal'
+                  : selectedRole === 'doctor'
+                  ? 'Official Medical Practitioner & Doctor Registration Portal'
+                  : 'Official Patient Citizen Health Record Portal'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+              {selectedRole === 'hospital'
+                ? 'Hospital Facility Registration & Onboarding'
+                : selectedRole === 'doctor'
+                ? 'Doctor & Medical Specialist Registration'
+                : 'Patient Health Profile & Biometrics Registration'}
+            </h1>
+            <p className="text-teal-100/80 text-xs sm:text-sm max-w-2xl mt-2 leading-relaxed">
+              {selectedRole === 'hospital'
+                ? 'Complete official hospital registration with bed capacities, emergency trauma capabilities, clinical establishment licenses, fire safety, pollution board NOCs, and administrative credentials.'
+                : selectedRole === 'doctor'
+                ? `Register verified clinical credentials, medical council licensing, educational degrees, Indian languages, and consultation economics with official affiliation to ${preselectedHospitalName || 'the healthcare network'}.`
+                : 'Register comprehensive patient health record with Aadhaar identification, vital biometrics, emergency contacts, and medical history.'}
+            </p>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Account Registration & Clinical Onboarding
-          </h1>
-          <p className="text-teal-100/80 text-xs sm:text-sm max-w-2xl mt-2 leading-relaxed">
-            Register your Hospital Facility, Medical Practitioner profile, or Patient Health record. All clinical credentials, licensing numbers, and identification documents are verified and stored directly in the ecosystem database.
-          </p>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer shrink-0 self-start sm:self-center shadow-xs"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Dashboard</span>
+            </button>
+          )}
         </div>
 
         {/* Decorative background glow */}
         <div className="absolute right-0 top-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
       </div>
 
-      {/* Role Selection Tabs */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="mb-2 px-2 flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-            Choose What You Want To Register:
-          </span>
-          <span className="text-[11px] text-slate-500 font-semibold">
-            {registrationStep === 'auth' ? 'Step 1 of 2 • Sign Up or Authenticate' : registrationStep === 'otp' ? 'Step 2 of 2 • Verify Email Code' : 'Step 2 of 2 • Complete Detailed Profile'}
-          </span>
+      {/* Role Selection Tabs (Shown on standalone registration page or unlocked role views) */}
+      {!lockRole && (
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="mb-2 px-2 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Choose What You Want To Register:
+            </span>
+            <span className="text-[11px] text-slate-500 font-semibold">
+              {registrationStep === 'auth' ? 'Step 1 of 2 • Sign Up or Authenticate' : registrationStep === 'otp' ? 'Step 2 of 2 • Verify Email Code' : 'Step 2 of 2 • Complete Detailed Profile'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            
+            {/* Hospital Registration Tab */}
+            <button
+              type="button"
+              onClick={() => handleRoleChange('hospital')}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3.5 ${
+                selectedRole === 'hospital'
+                  ? 'border-amber-600 bg-amber-50/70 text-amber-950 ring-2 ring-amber-500/20 shadow-xs'
+                  : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${
+                selectedRole === 'hospital' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700'
+              }`}>
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold">Hospital Facility</p>
+                  {selectedRole === 'hospital' && (
+                    <span className="text-[10px] bg-amber-200 text-amber-900 font-black px-1.5 py-0.2 rounded-full">ACTIVE</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                  Establishments, bed infrastructure, emergency trauma centers & department accreditation.
+                </p>
+              </div>
+            </button>
+
+            {/* Doctor Registration Tab */}
+            <button
+              type="button"
+              onClick={() => handleRoleChange('doctor')}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3.5 ${
+                selectedRole === 'doctor'
+                  ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
+                  : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${
+                selectedRole === 'doctor' ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700'
+              }`}>
+                <Stethoscope className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold">Doctor / Physician</p>
+                  {selectedRole === 'doctor' && (
+                    <span className="text-[10px] bg-indigo-200 text-indigo-900 font-black px-1.5 py-0.2 rounded-full">ACTIVE</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                  Clinical practitioners, medical license verification & hospital department affiliation.
+                </p>
+              </div>
+            </button>
+
+            {/* Patient Registration Tab */}
+            <button
+              type="button"
+              onClick={() => handleRoleChange('patient')}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3.5 ${
+                selectedRole === 'patient'
+                  ? 'border-teal-600 bg-teal-50/70 text-teal-950 ring-2 ring-teal-500/20 shadow-xs'
+                  : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${
+                selectedRole === 'patient' ? 'bg-teal-600 text-white' : 'bg-teal-100 text-teal-700'
+              }`}>
+                <UserIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold">Patient / Individual</p>
+                  {selectedRole === 'patient' && (
+                    <span className="text-[10px] bg-teal-200 text-teal-900 font-black px-1.5 py-0.2 rounded-full">ACTIVE</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                  Govt ID, health biometrics, IoT vital telemetry & personal health profile.
+                </p>
+              </div>
+            </button>
+
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          
-          {/* Hospital Registration Tab */}
-          <button
-            type="button"
-            onClick={() => handleRoleChange('hospital')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3.5 ${
-              selectedRole === 'hospital'
-                ? 'border-amber-600 bg-amber-50/70 text-amber-950 ring-2 ring-amber-500/20 shadow-xs'
-                : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <div className={`p-2.5 rounded-xl shrink-0 ${
-              selectedRole === 'hospital' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700'
-            }`}>
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-bold">Hospital Facility</p>
-                {selectedRole === 'hospital' && (
-                  <span className="text-[10px] bg-amber-200 text-amber-900 font-black px-1.5 py-0.2 rounded-full">ACTIVE</span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                Establishments, bed infrastructure, emergency trauma centers & department accreditation.
-              </p>
-            </div>
-          </button>
-
-          {/* Doctor Registration Tab */}
-          <button
-            type="button"
-            onClick={() => handleRoleChange('doctor')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3.5 ${
-              selectedRole === 'doctor'
-                ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
-                : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <div className={`p-2.5 rounded-xl shrink-0 ${
-              selectedRole === 'doctor' ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700'
-            }`}>
-              <Stethoscope className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-bold">Doctor / Physician</p>
-                {selectedRole === 'doctor' && (
-                  <span className="text-[10px] bg-indigo-200 text-indigo-900 font-black px-1.5 py-0.2 rounded-full">ACTIVE</span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                Clinical practitioners, medical license verification & hospital department affiliation.
-              </p>
-            </div>
-          </button>
-
-          {/* Patient Registration Tab */}
-          <button
-            type="button"
-            onClick={() => handleRoleChange('patient')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3.5 ${
-              selectedRole === 'patient'
-                ? 'border-teal-600 bg-teal-50/70 text-teal-950 ring-2 ring-teal-500/20 shadow-xs'
-                : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <div className={`p-2.5 rounded-xl shrink-0 ${
-              selectedRole === 'patient' ? 'bg-teal-600 text-white' : 'bg-teal-100 text-teal-700'
-            }`}>
-              <UserIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-bold">Patient / Individual</p>
-                {selectedRole === 'patient' && (
-                  <span className="text-[10px] bg-teal-200 text-teal-900 font-black px-1.5 py-0.2 rounded-full">ACTIVE</span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                Govt ID, health biometrics, IoT vital telemetry & personal health profile.
-              </p>
-            </div>
-          </button>
-
-        </div>
-      </div>
+      )}
 
       {/* Success Notification */}
       {successMessage && (
@@ -1602,8 +1694,8 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
         </div>
       )}
 
-      {/* Error Notification */}
-      {error && (
+      {/* Error Notification (Only shown during initial auth step; form field errors show directly at each box) */}
+      {error && registrationStep !== 'form' && (
         <div className="p-4 bg-rose-50 border border-rose-300 rounded-2xl text-rose-900 text-xs flex items-center gap-2.5 animate-in fade-in">
           <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
           <span className="font-semibold">{error}</span>
@@ -1882,36 +1974,38 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
       {/* STAGE 3: THE REGISTRATION PORTAL NEATLY OPENED TO FILL DETAILS */}
       {registrationStep === 'form' && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6 animate-in fade-in">
+        <form onSubmit={handleSubmit} noValidate className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6 animate-in fade-in">
           
-          {/* Top Verified Identity Banner */}
-          <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-emerald-950">Email Verified & Authenticated</span>
-                  <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 text-[10px] font-bold rounded-full">
-                    Email Security Verified
-                  </span>
+          {/* Top Verified Identity Banner (Shown only on standalone page when email is prefilled) */}
+          {!isEmbedded && email && (
+            <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-950">Email Verified & Authenticated</span>
+                    <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 text-[10px] font-bold rounded-full">
+                      Email Security Verified
+                    </span>
+                  </div>
+                  <p className="text-emerald-800 font-mono text-[11px] mt-0.5">
+                    {email} • Registration details unlocked for {selectedRole.toUpperCase()}
+                  </p>
                 </div>
-                <p className="text-emerald-800 font-mono text-[11px] mt-0.5">
-                  {email} • Registration details unlocked for {selectedRole.toUpperCase()}
-                </p>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setRegistrationStep('auth');
-                setOtpInput('');
-              }}
-              className="text-[11px] font-bold text-emerald-900 hover:underline cursor-pointer self-start sm:self-auto"
-            >
-              Change Email / Account
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRegistrationStep('auth');
+                  setOtpInput('');
+                }}
+                className="text-[11px] font-bold text-emerald-900 hover:underline cursor-pointer self-start sm:self-auto"
+              >
+                Change Email / Account
+              </button>
+            </div>
+          )}
 
           {/* Section Heading: Complete Basic Details */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -3133,9 +3227,9 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </span>
             </div>
 
-            {/* Row 1: Professional Identity - Name, Email, Gender, Phone */}
+            {/* Row 1: Professional Identity - Name, Email, Phone, Gender */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="md:col-span-2" data-field="name">
+              <div data-field="name">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Doctor Full Name (As Registered with Medical Council) *
                 </label>
@@ -3177,6 +3271,28 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   }`}
                 />
                 {renderFieldError('email')}
+              </div>
+
+              <div data-field="phone">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Primary Mobile Phone *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    clearFieldError('phone');
+                  }}
+                  placeholder="+91 98765-43210"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none ${
+                    fieldErrors['phone']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
+                />
+                {renderFieldError('phone')}
               </div>
 
               <div>
@@ -3235,8 +3351,8 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </div>
             </div>
 
-            {/* Row 3: Medical Council Registration & ABDM Healthcare Professional ID */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
+            {/* Row 3: Medical Council Registration, ABDM HPR ID & Doctor Govt ID */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Registered Medical Council *
@@ -3274,10 +3390,32 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 {renderFieldError('docLicense')}
               </div>
 
+              <div data-field="docGovtIdNumber">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Doctor Aadhaar / Govt ID Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={docGovtIdNumber}
+                  onChange={(e) => {
+                    setDocGovtIdNumber(e.target.value);
+                    clearFieldError('docGovtIdNumber');
+                  }}
+                  placeholder="e.g. 5621 8901 2345"
+                  className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs focus:ring-2 outline-none font-mono font-bold text-indigo-900 ${
+                    fieldErrors['docGovtIdNumber']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
+                />
+                {renderFieldError('docGovtIdNumber')}
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-slate-700">
-                    ABDM Healthcare Professional ID (HPR ID)
+                    ABDM Professional ID (HPR ID)
                   </label>
                   <span className="text-[10px] text-sky-700 font-bold bg-sky-100 px-1.5 py-0.5 rounded">
                     14-Digits
@@ -3465,7 +3603,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
             </div>
 
             {/* Row 5: Education Credentials, Passing Year, Experience */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Undergraduate Degree *
@@ -3482,7 +3620,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Postgraduate Degree / Super-Specialty
+                  Postgraduate Degree
                 </label>
                 <input
                   type="text"
@@ -3515,9 +3653,31 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 {renderFieldError('docCollege')}
               </div>
 
+              <div data-field="docPassingYear">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Passing / Graduation Year *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={docPassingYear}
+                  onChange={(e) => {
+                    setDocPassingYear(e.target.value);
+                    clearFieldError('docPassingYear');
+                  }}
+                  placeholder="2018"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-mono ${
+                    fieldErrors['docPassingYear']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
+                />
+                {renderFieldError('docPassingYear')}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Years of Experience Post-Qualification *
+                  Years of Experience *
                 </label>
                 <input
                   type="number"
@@ -3818,7 +3978,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
 
             {/* Row 1: Legal Name, Email, Phone */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+              <div data-field="name">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Full Legal Patient Name *
                 </label>
@@ -3826,13 +3986,21 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    clearFieldError('name');
+                  }}
                   placeholder="e.g. Alex Johnson"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 focus:bg-white outline-none font-semibold text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-semibold text-slate-800 ${
+                    fieldErrors['name']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-teal-500'
+                  }`}
                 />
+                {renderFieldError('name')}
               </div>
 
-              <div>
+              <div data-field="email">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Account Email Address *
                 </label>
@@ -3840,13 +4008,21 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearFieldError('email');
+                  }}
                   placeholder="alex.johnson@example.com"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 focus:bg-white outline-none font-mono text-slate-800"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none font-mono text-slate-800 ${
+                    fieldErrors['email']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-teal-500'
+                  }`}
                 />
+                {renderFieldError('email')}
               </div>
 
-              <div>
+              <div data-field="phone">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Primary Mobile Phone *
                 </label>
@@ -3854,10 +4030,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   type="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 876-5432"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 focus:bg-white outline-none"
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    clearFieldError('phone');
+                  }}
+                  placeholder="+91 98765-43210"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:bg-white outline-none ${
+                    fieldErrors['phone']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-teal-500'
+                  }`}
                 />
+                {renderFieldError('phone')}
               </div>
             </div>
 
@@ -3927,7 +4111,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                <div>
+                <div data-field="patAadharNumber">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Aadhaar Card Number (12 Digits) *
                   </label>
@@ -3935,25 +4119,40 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     type="text"
                     required
                     value={patAadharNumber}
-                    onChange={(e) => setPatAadharNumber(e.target.value)}
+                    onChange={(e) => {
+                      setPatAadharNumber(e.target.value);
+                      clearFieldError('patAadharNumber');
+                    }}
                     placeholder="e.g. 4589 1204 8832"
-                    className="w-full px-3.5 py-2.5 bg-white border border-teal-300 rounded-xl text-xs focus:ring-2 focus:ring-teal-600 outline-none font-mono font-bold text-slate-900"
+                    className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs focus:ring-2 focus:ring-teal-600 outline-none font-mono font-bold text-slate-900 ${
+                      fieldErrors['patAadharNumber']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-teal-300'
+                    }`}
                   />
                   <p className="text-[10px] text-teal-700 mt-1">
                     Enter valid 12-digit UIDAI Aadhaar Card Number
                   </p>
+                  {renderFieldError('patAadharNumber')}
                 </div>
 
-                <div>
+                <div data-field="patAadharFile">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Upload Aadhaar Card Document (PDF / Image) *
                   </label>
-                  <div className="flex flex-col sm:flex-row items-center gap-2 bg-white p-2 border border-teal-300 rounded-xl">
+                  <div className={`flex flex-col sm:flex-row items-center gap-2 bg-white p-2 border rounded-xl ${
+                    fieldErrors['patAadharFile']
+                      ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                      : 'border-teal-300'
+                  }`}>
                     <input
                       type="file"
                       required={!patAadharFile}
                       accept="image/*,.pdf"
-                      onChange={(e) => handleFileUpload(e, setPatAadharFile, 'Aadhaar Card')}
+                      onChange={(e) => {
+                        handleFileUpload(e, setPatAadharFile, 'Aadhaar Card');
+                        clearFieldError('patAadharFile');
+                      }}
                       className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-teal-700 file:text-white hover:file:bg-teal-800 cursor-pointer"
                     />
                     {patAadharFile && (
@@ -3965,6 +4164,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <p className="text-[10px] text-slate-500 mt-1">
                     Upload front/back Aadhaar card scan or e-Aadhaar PDF
                   </p>
+                  {renderFieldError('patAadharFile')}
                 </div>
               </div>
             </div>
@@ -4129,7 +4329,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </div>
 
                 {/* 2. Pincode with Auto-Fetch */}
-                <div>
+                <div data-field="patPincode">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700">
                       Pin Code (6-Digits) *
@@ -4149,10 +4349,18 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     required
                     maxLength={6}
                     value={patPincode}
-                    onChange={(e) => handlePatientPincodeLookup(e.target.value)}
+                    onChange={(e) => {
+                      handlePatientPincodeLookup(e.target.value);
+                      clearFieldError('patPincode');
+                    }}
                     placeholder="e.g. 500001"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-teal-500 outline-none"
+                    className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-teal-500 outline-none ${
+                      fieldErrors['patPincode']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-slate-200'
+                    }`}
                   />
+                  {renderFieldError('patPincode')}
                 </div>
 
                 {/* 3. State Dropdown */}
@@ -4221,7 +4429,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 </div>
 
                 {/* 6. Street Address */}
-                <div>
+                <div data-field="patStreet">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Residential Street Address *
                   </label>
@@ -4229,16 +4437,24 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                     type="text"
                     required
                     value={patStreet}
-                    onChange={(e) => setPatStreet(e.target.value)}
+                    onChange={(e) => {
+                      setPatStreet(e.target.value);
+                      clearFieldError('patStreet');
+                    }}
                     placeholder="e.g. Flat 301, Road 12, Banjara Hills"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none"
+                    className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none ${
+                      fieldErrors['patStreet']
+                        ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                        : 'border-slate-200'
+                    }`}
                   />
+                  {renderFieldError('patStreet')}
                 </div>
               </div>
             </div>
 
             {/* Row 5: Priority Emergency Contacts Directory (Supports up to 3 emergency contacts) */}
-            <div className="p-4 bg-rose-50/60 border border-rose-200/80 rounded-2xl space-y-4 shadow-2xs">
+            <div data-field="patEmergencyContacts" className="p-4 bg-rose-50/60 border border-rose-200/80 rounded-2xl space-y-4 shadow-2xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-100 pb-2.5">
                 <div>
                   <span className="text-xs font-bold text-rose-950 flex items-center gap-1.5">
@@ -4248,6 +4464,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   <p className="text-[11px] text-rose-800">
                     Add up to 3 priority emergency contacts for instant telemetry dispatch, SOS distress, and clinical escalation.
                   </p>
+                  {renderFieldError('patEmergencyContacts')}
                 </div>
                 {patEmergencyContacts.length < 3 && (
                   <button
@@ -4492,7 +4709,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                 onClick={() => {
                   setStatusPopup(null);
                   if (onRegistrationComplete) {
-                    onRegistrationComplete();
+                    onRegistrationComplete(lastRegisteredUser || undefined);
                   } else if (onOpenSignIn) {
                     onOpenSignIn();
                   }

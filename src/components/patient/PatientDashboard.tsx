@@ -51,7 +51,8 @@ import {
   Trash2,
   Phone,
   Award,
-  FileCheck
+  FileCheck,
+  Video
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -75,6 +76,8 @@ import { api } from '../../services/api';
 import { PrescriptionModal } from '../prescriptions/PrescriptionModal';
 import { matchSpecialization, SPECIALIZATION_RULES } from '../../utils/specializationMatcher';
 import { generateHealthPassportPdf } from '../../utils/healthPassportPdf';
+import { EmergencyVitalFloatingAlert } from './EmergencyVitalFloatingAlert';
+import { VirtualVisitSuite } from './VirtualVisitSuite';
 
 // Flexible Specialization & Medical Keyword Dictionary
 // User requirement: A patient cannot type exact specialization. If they search for 'heart diseases' it should redirect to cardiology and like that.
@@ -162,7 +165,8 @@ export const PatientDashboard: React.FC = () => {
   const patientId = user?.id || 'pat-1';
   const patientProfile = user?.patientProfile;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'morning_check' | 'doctors' | 'assistant' | 'appointments' | 'prescriptions' | 'emergency_contacts' | 'emergency_log'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'morning_check' | 'doctors' | 'assistant' | 'appointments' | 'virtual_visit' | 'prescriptions' | 'emergency_contacts' | 'emergency_log'>('overview');
+  const [urgentVirtualVisitReason, setUrgentVirtualVisitReason] = useState<string | null>(null);
 
   // Data states
   const [readings, setReadings] = useState<IoTReading[]>([]);
@@ -211,27 +215,6 @@ export const PatientDashboard: React.FC = () => {
   const [voiceErrorNotice, setVoiceErrorNotice] = useState<string | null>(null);
   const [voiceActiveRecognition, setVoiceActiveRecognition] = useState<any | null>(null);
 
-  // Prevent background portal scrolling when Voice Assistant modal is open & handle Escape key
-  useEffect(() => {
-    if (!isVoiceModalOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (voiceActiveRecognition) {
-          try { voiceActiveRecognition.stop(); } catch {}
-        }
-        setIsListeningVoice(false);
-        setIsVoiceModalOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isVoiceModalOpen, voiceActiveRecognition]);
-
   // Doctor Search & Booking Modal
   const [hospitalsList, setHospitalsList] = useState<User[]>([]);
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>('all');
@@ -241,6 +224,8 @@ export const PatientDashboard: React.FC = () => {
   const [bookingReason, setBookingReason] = useState('Cardiovascular & General Health Checkup');
   const [bookingSymptoms, setBookingSymptoms] = useState('');
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookingFieldErrors, setBookingFieldErrors] = useState<Record<string, string>>({});
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [specializationFilter, setSpecializationFilter] = useState('');
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
   const [hospitalSearchText, setHospitalSearchText] = useState('');
@@ -253,6 +238,49 @@ export const PatientDashboard: React.FC = () => {
   // Prescription View Modal
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Prevent background portal scrolling when Booking modal or other dialogs are open & handle Escape key
+  const isAnyModalOpen = Boolean(
+    selectedDoctorForBooking ||
+    selectedPrescription ||
+    isEmergencyChoiceModalOpen ||
+    isVoiceModalOpen
+  );
+
+  useEffect(() => {
+    if (!isAnyModalOpen) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedDoctorForBooking(null);
+        setSelectedPrescription(null);
+        setIsEmergencyChoiceModalOpen(false);
+        if (voiceActiveRecognition) {
+          try { voiceActiveRecognition.stop(); } catch {}
+        }
+        setIsListeningVoice(false);
+        setIsVoiceModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAnyModalOpen, voiceActiveRecognition]);
+
+  // Smooth scroll to top when switching portal tabs
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
+
+
 
   // Helper: Generates next 7 working days (Mon-Sat, skipping Sundays) and identifies blocked days
   const getDoctorWorkingDaysOptions = (doctor: User | null) => {
@@ -287,13 +315,22 @@ export const PatientDashboard: React.FC = () => {
     return result;
   };
 
-  const handleOpenBookingModalForDoctor = (doc: User) => {
+  const handleOpenBookingModalForDoctor = (doc: User, preselectedSlot?: string) => {
     setSelectedDoctorForBooking(doc);
     setBookingError(null);
+    setBookingFieldErrors({});
     const options = getDoctorWorkingDaysOptions(doc);
     const firstAvailable = options.find((o) => !o.isBlocked);
     const chosenDate = firstAvailable ? firstAvailable.dateStr : options[0]?.dateStr || '';
     setBookingDate(chosenDate);
+    if (preselectedSlot) {
+      setBookingSlot(preselectedSlot);
+    } else {
+      const doctorSlots = doc.doctorProfile?.customSlotTimings?.length
+        ? doc.doctorProfile.customSlotTimings
+        : ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '02:00 PM', '02:30 PM', '03:00 PM', '04:00 PM'];
+      setBookingSlot(doctorSlots[0] || '10:00 AM');
+    }
   };
 
   useEffect(() => {
@@ -727,7 +764,24 @@ export const PatientDashboard: React.FC = () => {
     e.preventDefault();
     if (!selectedDoctorForBooking) return;
 
+    const errors: Record<string, string> = {};
+    if (!bookingDate) {
+      errors.date = 'Please select an available consultation date.';
+    }
+    if (!bookingSlot) {
+      errors.slot = 'Please select an available consultation time slot.';
+    }
+    if (!bookingReason || !bookingReason.trim()) {
+      errors.reason = 'Please enter the primary reason for your consultation.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setBookingFieldErrors(errors);
+      return;
+    }
+
+    setBookingFieldErrors({});
     setBookingError(null);
+    setBookingSubmitting(true);
     try {
       await api.bookAppointment({
         patientId,
@@ -735,17 +789,19 @@ export const PatientDashboard: React.FC = () => {
         doctorId: selectedDoctorForBooking.id,
         date: bookingDate,
         timeSlot: bookingSlot,
-        reasonForVisit: bookingReason,
-        symptoms: bookingSymptoms,
+        reasonForVisit: bookingReason.trim(),
+        symptoms: bookingSymptoms.trim(),
       });
 
       setSelectedDoctorForBooking(null);
-      setNotification('Appointment booked successfully! Awaiting doctor approval.');
-      setTimeout(() => setNotification(null), 4000);
-      loadData();
+      await loadData();
       setActiveTab('appointments');
+      setNotification('✅ Appointment booked successfully! Transitioned to My Appointments.');
+      setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
       setBookingError(err.message || 'Booking failed');
+    } finally {
+      setBookingSubmitting(false);
     }
   };
 
@@ -1079,10 +1135,18 @@ export const PatientDashboard: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('morning_check')}
-              className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-teal-950 font-black rounded-xl text-xs shadow-xs flex items-center gap-1.5 transition-all"
+              className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-teal-950 font-black rounded-xl text-xs shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <HeartPulse className="w-4 h-4 text-teal-900 animate-pulse" />
               <span>Perform Morning Check</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('virtual_visit')}
+              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 transition-all cursor-pointer border border-teal-400/40"
+            >
+              <Video className="w-4 h-4 text-teal-100" />
+              <span>Virtual Visit (Video)</span>
             </button>
 
             <button
@@ -1311,7 +1375,7 @@ export const PatientDashboard: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('appointments')}
-          className={`py-3.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 shrink-0 transition-all ${
+          className={`py-3.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
             activeTab === 'appointments'
               ? 'border-teal-700 text-teal-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1319,6 +1383,18 @@ export const PatientDashboard: React.FC = () => {
         >
           <Calendar className="w-4 h-4" />
           <span>My Appointments ({appointments.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('virtual_visit')}
+          className={`py-3.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
+            activeTab === 'virtual_visit'
+              ? 'border-teal-700 text-teal-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Video className="w-4 h-4 text-teal-600" />
+          <span>Virtual Visits & Video</span>
         </button>
 
         <button
@@ -2868,7 +2944,7 @@ export const PatientDashboard: React.FC = () => {
                               {kit.category}
                             </span>
                             <span className="font-mono text-base font-black text-slate-900">
-                              ${kit.price}
+                              ₹{kit.price.toLocaleString('en-IN')}
                             </span>
                           </div>
 
@@ -2901,7 +2977,7 @@ export const PatientDashboard: React.FC = () => {
                           className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white font-bold rounded-xl text-xs shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <Package className="w-4 h-4" />
-                          <span>{buyingKitId === kit.id ? 'Connecting to Account...' : `Buy Kit & Activate on Portal ($${kit.price})`}</span>
+                          <span>{buyingKitId === kit.id ? 'Connecting to Account...' : `Buy Kit & Activate on Portal (₹${kit.price.toLocaleString('en-IN')})`}</span>
                         </button>
                       </div>
                     ))}
@@ -3424,14 +3500,22 @@ export const PatientDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const matched = doctorsList.find((d) => d.id === assistantResult.matchedDoctorId) || doctorsList[0];
+                      const recSpec = (assistantResult.recommendedSpecialization || '').toLowerCase();
+                      const matched =
+                        doctorsList.find((d) => d.id === assistantResult.matchedDoctorId) ||
+                        doctorsList.find((d) => (d.doctorProfile?.specialization || '').toLowerCase().includes(recSpec)) ||
+                        doctorsList[0];
+                      setBookingReason(`Gemini Triage: ${assistantResult.recommendedSpecialization} Consultation`);
+                      setBookingSymptoms(symptomPrompt);
+                      setActiveTab('doctors');
+                      if (assistantResult.recommendedSpecialization) {
+                        setSpecializationSearchText(assistantResult.recommendedSpecialization);
+                      }
                       if (matched) {
-                        setSelectedDoctorForBooking(matched);
-                        setBookingReason(`Gemini Triage: ${assistantResult.recommendedSpecialization} Consultation`);
-                        setBookingSymptoms(symptomPrompt);
+                        handleOpenBookingModalForDoctor(matched);
                       }
                     }}
-                    className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                    className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all"
                   >
                     <Calendar className="w-3.5 h-3.5" />
                     <span>Book Recommended Doctor ({assistantResult.recommendedSpecialization})</span>
@@ -3946,11 +4030,14 @@ export const PatientDashboard: React.FC = () => {
                                       </span>
                                     </div>
                                     <div className="grid grid-cols-4 gap-1">
-                                      {['10:00 AM', '11:15 AM', '02:30 PM', '04:45 PM'].map((slotTime) => (
+                                      {(doc.doctorProfile?.customSlotTimings?.length
+                                        ? doc.doctorProfile.customSlotTimings.slice(0, 4)
+                                        : ['09:00 AM', '10:00 AM', '11:30 AM', '02:30 PM']
+                                      ).map((slotTime) => (
                                         <button
                                           key={slotTime}
                                           type="button"
-                                          onClick={() => handleOpenBookingModalForDoctor(doc)}
+                                          onClick={() => handleOpenBookingModalForDoctor(doc, slotTime)}
                                           className="py-0.5 px-1 text-center text-[10px] font-mono font-bold bg-white hover:bg-teal-700 hover:text-white text-teal-900 border border-teal-200 rounded transition-colors cursor-pointer shadow-2xs"
                                         >
                                           {slotTime}
@@ -4024,19 +4111,37 @@ export const PatientDashboard: React.FC = () => {
 
       {/* ================= TAB 5: APPOINTMENTS ================= */}
       {activeTab === 'appointments' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              My Booked Consultations ({appointments.length})
-            </h3>
-            <span className="text-xs text-slate-500">
-              Pending appointments are reviewed by your physician
-            </span>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-300">
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                My Booked Consultations ({appointments.length})
+              </h3>
+              <span className="text-xs text-slate-500">
+                Pending appointments are reviewed by your physician
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('doctors')}
+              className="px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Book New Consultation</span>
+            </button>
           </div>
 
           {appointments.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              No appointments scheduled yet. Click "Find Doctors" to schedule a consultation.
+            <div className="p-8 text-center text-slate-500 text-xs space-y-3">
+              <p>No appointments scheduled yet. Click below to find a specialist and schedule a consultation.</p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('doctors')}
+                className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold rounded-xl text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Stethoscope className="w-3.5 h-3.5 text-teal-700" />
+                <span>Find & Book Doctors &rarr;</span>
+              </button>
             </div>
           ) : (
             <div className="divide-y divide-slate-100 text-xs">
@@ -4102,14 +4207,40 @@ export const PatientDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="text-right text-[11px] text-slate-400">
-                    Booked on {new Date(apt.createdAt).toLocaleDateString()}
+                  <div className="flex flex-col sm:items-end justify-between gap-2 shrink-0">
+                    <span className="text-[11px] text-slate-400">
+                      Booked on {new Date(apt.createdAt).toLocaleDateString()}
+                    </span>
+                    {apt.status !== 'cancelled' && apt.status !== 'rejected' && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('virtual_visit')}
+                        className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        <span>Join Virtual Visit</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {/* ================= TAB 5B: VIRTUAL VISITS & VIDEO CONFERENCING ================= */}
+      {activeTab === 'virtual_visit' && (
+        <VirtualVisitSuite
+          patientId={patientId}
+          patientName={user?.name || 'Patient'}
+          doctorsList={doctorsList}
+          appointments={appointments}
+          latestReading={latestReading}
+          initialUrgentReason={urgentVirtualVisitReason}
+          onAppointmentBooked={loadData}
+          onClearUrgentReason={() => setUrgentVirtualVisitReason(null)}
+        />
       )}
 
       {/* ================= TAB 6: PRESCRIPTIONS & MEDICINES ================= */}
@@ -4359,36 +4490,56 @@ export const PatientDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ================= BOOK APPOINTMENT MODAL ================= */}
+      {/* ================= BOOK APPOINTMENT MODAL / TRANSITION VIEW ================= */}
       {selectedDoctorForBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-xs animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-teal-600" />
-                <span>Schedule Consultation with {selectedDoctorForBooking.name}</span>
-              </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto overscroll-contain transition-all duration-300 animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedDoctorForBooking(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-100 text-xs my-auto max-h-[90vh] overflow-y-auto overscroll-contain flex flex-col relative transition-all duration-300 animate-in zoom-in-95 slide-in-from-bottom-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDoctorForBooking(null)}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-teal-600" />
+                  <span>Schedule Consultation with {selectedDoctorForBooking.name.startsWith('Dr.') ? selectedDoctorForBooking.name : `Dr. ${selectedDoctorForBooking.name}`}</span>
+                </h3>
+              </div>
               <button
+                type="button"
                 onClick={() => setSelectedDoctorForBooking(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
             {bookingError && (
-              <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
-                {bookingError}
+              <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{bookingError}</span>
               </div>
             )}
 
-            <form onSubmit={handleBookAppointmentSubmit} className="space-y-3.5 mt-4">
+            <form noValidate onSubmit={handleBookAppointmentSubmit} className="space-y-3.5 mt-4">
               <div className="p-4 bg-gradient-to-br from-teal-50/80 via-slate-50 to-indigo-50/50 rounded-2xl border border-teal-200/80 shadow-2xs space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-extrabold text-slate-900 text-sm">
-                        Dr. {selectedDoctorForBooking.name}
+                        {selectedDoctorForBooking.name.startsWith('Dr.') ? selectedDoctorForBooking.name : `Dr. ${selectedDoctorForBooking.name}`}
                       </span>
                       {selectedDoctorForBooking.doctorProfile?.qualifications && (
                         <span className="text-[11px] font-mono font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -4518,7 +4669,12 @@ export const PatientDashboard: React.FC = () => {
                                 <button
                                   type="button"
                                   key={opt.dateStr}
-                                  onClick={() => setBookingDate(opt.dateStr)}
+                                  onClick={() => {
+                                    setBookingDate(opt.dateStr);
+                                    if (bookingFieldErrors.date) {
+                                      setBookingFieldErrors((prev) => ({ ...prev, date: '' }));
+                                    }
+                                  }}
                                   className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                                     isSelected
                                       ? 'border-teal-700 bg-teal-700 text-white shadow-xs font-bold'
@@ -4543,10 +4699,16 @@ export const PatientDashboard: React.FC = () => {
 
                           {/* Fallback Select Dropdown with disabled blocked options */}
                           <select
-                            required
                             value={bookingDate}
-                            onChange={(e) => setBookingDate(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            onChange={(e) => {
+                              setBookingDate(e.target.value);
+                              if (bookingFieldErrors.date) {
+                                setBookingFieldErrors((prev) => ({ ...prev, date: '' }));
+                              }
+                            }}
+                            className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs ${
+                              bookingFieldErrors.date ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-200'
+                            }`}
                           >
                             <option value="" disabled>-- Choose consultation date --</option>
                             {workingDays.map((opt) => (
@@ -4559,6 +4721,12 @@ export const PatientDashboard: React.FC = () => {
                               </option>
                             ))}
                           </select>
+                          {bookingFieldErrors.date && (
+                            <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1 mt-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{bookingFieldErrors.date}</span>
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
@@ -4606,7 +4774,12 @@ export const PatientDashboard: React.FC = () => {
                                 <button
                                   key={slot}
                                   type="button"
-                                  onClick={() => setBookingSlot(slot)}
+                                  onClick={() => {
+                                    setBookingSlot(slot);
+                                    if (bookingFieldErrors.slot) {
+                                      setBookingFieldErrors((prev) => ({ ...prev, slot: '' }));
+                                    }
+                                  }}
                                   className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
                                     isSelected
                                       ? 'bg-teal-700 text-white border-teal-800 shadow-xs font-bold ring-2 ring-teal-500'
@@ -4626,10 +4799,16 @@ export const PatientDashboard: React.FC = () => {
 
                           {/* Fallback Dropdown with Disabled Blocked Slots */}
                           <select
-                            required
                             value={bookingSlot}
-                            onChange={(e) => setBookingSlot(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
+                            onChange={(e) => {
+                              setBookingSlot(e.target.value);
+                              if (bookingFieldErrors.slot) {
+                                setBookingFieldErrors((prev) => ({ ...prev, slot: '' }));
+                              }
+                            }}
+                            className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs font-mono ${
+                              bookingFieldErrors.slot ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-200'
+                            }`}
                           >
                             <option value="" disabled>-- Select Time Slot --</option>
                             {doctorSlots.map((s) => {
@@ -4641,6 +4820,12 @@ export const PatientDashboard: React.FC = () => {
                               );
                             })}
                           </select>
+                          {bookingFieldErrors.slot && (
+                            <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1 mt-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{bookingFieldErrors.slot}</span>
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
@@ -4654,12 +4839,24 @@ export const PatientDashboard: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  required
                   value={bookingReason}
-                  onChange={(e) => setBookingReason(e.target.value)}
+                  onChange={(e) => {
+                    setBookingReason(e.target.value);
+                    if (bookingFieldErrors.reason) {
+                      setBookingFieldErrors((prev) => ({ ...prev, reason: '' }));
+                    }
+                  }}
                   placeholder="e.g. Morning hypertension spikes & IoT telemetry review"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs ${
+                    bookingFieldErrors.reason ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-200'
+                  }`}
                 />
+                {bookingFieldErrors.reason && (
+                  <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{bookingFieldErrors.reason}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -4700,16 +4897,23 @@ export const PatientDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedDoctorForBooking(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={Boolean(selectedDoctorForBooking.doctorProfile?.inSurgery)}
-                  className="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-xs"
+                  disabled={Boolean(selectedDoctorForBooking.doctorProfile?.inSurgery) || bookingSubmitting}
+                  className="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
                 >
-                  {selectedDoctorForBooking.doctorProfile?.inSurgery ? 'Doctor In Surgery (Unavailable)' : 'Confirm Appointment Booking'}
+                  {bookingSubmitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {selectedDoctorForBooking.doctorProfile?.inSurgery
+                      ? 'Doctor In Surgery (Unavailable)'
+                      : bookingSubmitting
+                      ? 'Booking Appointment...'
+                      : 'Confirm Appointment Booking'}
+                  </span>
                 </button>
               </div>
             </form>
@@ -4719,8 +4923,12 @@ export const PatientDashboard: React.FC = () => {
 
       {/* Emergency Hospital & Doctor Choice Modal (One-time single hospital selection) */}
       {isEmergencyChoiceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-xs animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-hidden">
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-xs animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2 text-rose-700 font-black text-sm">
                 <ShieldAlert className="w-5 h-5 text-rose-600" />
@@ -5078,6 +5286,33 @@ export const PatientDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* High-Priority Floating Emergency Alert Notification when IoT Kit Vital Signs are Outside Normal Ranges */}
+      <EmergencyVitalFloatingAlert
+        reading={latestReading}
+        liveSimVitals={{
+          heartRate: Number(simHeartRate),
+          systolicBp: Number(simSystolic),
+          diastolicBp: Number(simDiastolic),
+          spO2: Number(simSpO2),
+          temperature: Number(simTemp),
+          glucose: Number(simGlucose),
+        }}
+        patientName={user?.name || 'Patient'}
+        assignedDoctorName={patientProfile?.assignedDoctorName}
+        targetHospitalName={
+          patientProfile?.chosenEmergencyHospitalName ||
+          patientProfile?.assignedHospitalName ||
+          '24/7 Trauma & Emergency Center'
+        }
+        sosLoading={sosLoading}
+        onTriggerEmergencySOS={handleTriggerEmergencySOS}
+        onStartUrgentVirtualVisit={(anomaliesSummary) => {
+          setUrgentVirtualVisitReason(anomaliesSummary);
+          setActiveTab('virtual_visit');
+        }}
+        onOpenIoTKitTab={() => setActiveTab('morning_check')}
+      />
 
     </div>
   );

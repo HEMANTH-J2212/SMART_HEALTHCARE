@@ -15,7 +15,13 @@ import { HeartPulse } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { user, isLoading, logout } = useAuth();
-  const [activeView, setActiveView] = useState<string>('landing');
+  const [activeView, setActiveView] = useState<string>(() => {
+    return localStorage.getItem('smarthealth_active_view') || 'landing';
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('smarthealth_active_view', activeView);
+  }, [activeView]);
 
   const [authModalState, setAuthModalState] = useState<{
     isOpen: boolean;
@@ -32,9 +38,7 @@ const MainAppContent: React.FC = () => {
   React.useEffect(() => {
     if (user) {
       closeAuth();
-      if (user.role === 'admin') {
-        setActiveView('dashboard');
-      } else if (activeView === 'register' || activeView === 'landing') {
+      if (activeView === 'register' || activeView === 'landing') {
         setActiveView('dashboard');
       }
     } else {

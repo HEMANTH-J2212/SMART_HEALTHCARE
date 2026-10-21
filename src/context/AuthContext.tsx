@@ -36,13 +36,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     }
 
-    if (savedUserId) {
+    if (savedUserId || cachedUserStr) {
       api.getAllUsers().then((users) => {
         if (Array.isArray(users)) {
-          const found = users.find((u) => u.id === savedUserId);
+          let cached: any = null;
+          try { cached = cachedUserStr ? JSON.parse(cachedUserStr) : null; } catch {}
+          const found = users.find((u) => (savedUserId && u.id === savedUserId) || (cached?.email && u.email?.toLowerCase() === cached.email.toLowerCase()));
           if (found) {
             setUser(found);
+            localStorage.setItem('smarthealth_user_id', found.id);
             localStorage.setItem('smarthealth_user_data', JSON.stringify(found));
+          } else if (cached && cached.id) {
+            // Keep cached user session so reload never resets the user!
+            setUser(cached);
           }
         }
         setIsLoading(false);
@@ -86,8 +92,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const name = customName?.trim() || email.split('@')[0];
       const avatarUrl = customAvatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
       
-      // Auto-create is FALSE during login so unregistered accounts are rejected with an error!
-      const res = await api.googleLogin({ email, name, avatarUrl, autoCreateIfNotFound: false });
+      // Auto-create is true so genuine Google mail sign-ins succeed seamlessly without saying "Please register first"
+      const res = await api.googleLogin({ email, name, avatarUrl, autoCreateIfNotFound: true });
       setUser(res.user);
       localStorage.setItem('smarthealth_user_id', res.user.id);
       localStorage.setItem('smarthealth_user_data', JSON.stringify(res.user));

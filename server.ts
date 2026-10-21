@@ -28,9 +28,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '15mb' }));
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'Smart Health Management & Accident Prevention Ecosystem',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Static directory for uploaded files, certificates, and logos (zero-bloat static serving)
 const uploadsDir = path.resolve(__dirname, 'uploads');
@@ -104,9 +113,9 @@ const ai = new GoogleGenAI({
 // OTP Store: email -> { code: string, expiresAt: number }
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
 
-// Master Admin Email (Designated Admin Email: aivirtualcare@gmail.com)
+// Master Admin Email (Designated Admin Email: aivirtualcare@gmail.com & user account)
 const MASTER_ADMIN_EMAIL = 'aivirtualcare@gmail.com';
-const ADMIN_EMAILS = ['aivirtualcare@gmail.com'];
+const ADMIN_EMAILS = ['aivirtualcare@gmail.com', 'hemanthreddychilla220507@gmail.com'];
 
 // Pre-seeded Admin Authority (Master Admin: aivirtualcare@gmail.com)
 const defaultAdminUser: User = {
@@ -124,95 +133,9 @@ const defaultAdminUser: User = {
 let users: User[] = [defaultAdminUser];
 let doctorTransferRequests: DoctorTransferRequest[] = [];
 
-// Helper to provide realistic sample demo data on demand
+// Helper to provide realistic sample demo data on demand (User Requirement: NO default test user data injected)
 function getDemoSeedData() {
-  const demoHospitals: User[] = [
-    {
-      id: 'hosp-1',
-      name: 'Metro General Hospital & Heart Institute',
-      email: 'management@metrogeneral.org',
-      phone: '+1 (555) 345-6789',
-      role: 'hospital',
-      status: 'active',
-      avatarUrl: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=256&q=80',
-      createdAt: '2026-01-15T09:30:00Z',
-      hospitalProfile: {
-        hospitalName: 'Metro General Hospital & Heart Institute',
-        hospitalType: 'Private Super-Specialty',
-        licenseNumber: 'HOSP-LIC-2024-8841',
-        accreditation: 'JCI & NABH Certified Gold',
-        address: '742 Healthcare Boulevard, Medical District',
-        city: 'Metro City',
-        state: 'California',
-        emergencyHotline: '+1 (800) 555-9111',
-        contactEmail: 'emergency@metrogeneral.org',
-        contactPhone: '+1 (555) 345-6789',
-        adminRepresentative: 'Director Eleanor Vance',
-        departments: ['Cardiology (Heart & Blood Vessels)', 'Emergency & Trauma Medicine', 'Pulmonology (Lungs & Respiratory)', 'Neurology & Stroke Care (Brain & Nerves)', 'General & Internal Medicine'],
-        totalBeds: 450,
-        availableBeds: 86,
-        icuBeds: 42,
-        verificationStatus: 'verified',
-      },
-    },
-    {
-      id: 'hosp-2',
-      name: 'Apex Super Specialty Care',
-      email: 'admin@apexcare.org',
-      phone: '+1 (555) 987-6543',
-      role: 'hospital',
-      status: 'active',
-      avatarUrl: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=256&q=80',
-      createdAt: '2026-02-01T10:00:00Z',
-      hospitalProfile: {
-        hospitalName: 'Apex Super Specialty Care',
-        hospitalType: 'Private Super-Specialty',
-        licenseNumber: 'HOSP-LIC-2025-1029',
-        accreditation: 'State Health Board Super Specialty Tier-1',
-        address: '120 Science Park Way',
-        city: 'Silver Springs',
-        state: 'California',
-        emergencyHotline: '+1 (800) 555-8222',
-        contactEmail: 'er@apexcare.org',
-        contactPhone: '+1 (555) 987-6543',
-        adminRepresentative: 'Dr. Michael Chen, Chief of Medicine',
-        departments: ['Pulmonology (Lungs & Respiratory)', 'Orthopedics (Bones & Joints)', 'Cardiology (Heart & Blood Vessels)', 'Nephrology (Kidney Care)'],
-        totalBeds: 320,
-        availableBeds: 54,
-        icuBeds: 30,
-        verificationStatus: 'verified',
-      },
-    },
-    {
-      id: 'hosp-pending-1',
-      name: 'St. Jude Trauma & Research Hospital',
-      email: 'admin@stjudetrauma.org',
-      phone: '+1 (555) 765-4321',
-      role: 'hospital',
-      status: 'pending_verification',
-      avatarUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=256&q=80',
-      createdAt: '2026-09-28T14:15:00Z',
-      hospitalProfile: {
-        hospitalName: 'St. Jude Trauma & Research Hospital',
-        hospitalType: 'Trust / Non-Profit',
-        licenseNumber: 'HOSP-LIC-REQ-9921',
-        accreditation: 'Level-1 Trauma & Regional Cardiac Center Candidate',
-        address: '450 North Valley Expressway',
-        city: 'Valley View',
-        state: 'California',
-        emergencyHotline: '+1 (800) 555-9333',
-        contactEmail: 'trauma@stjudetrauma.org',
-        contactPhone: '+1 (555) 765-4321',
-        adminRepresentative: 'Sarah Jenkins, Hospital Administrator',
-        departments: ['Emergency & Trauma Medicine', 'Cardiology (Heart & Blood Vessels)', 'Orthopedics (Bones & Joints)'],
-        totalBeds: 280,
-        availableBeds: 70,
-        icuBeds: 35,
-        verificationStatus: 'pending_admin_verification',
-      },
-    },
-  ];
-
+  const demoHospitals: User[] = [];
   const demoDoctors: User[] = [];
   const demoPatients: User[] = [];
   const demoAppointments: Appointment[] = [];
@@ -459,19 +382,26 @@ function loadStorageFromDisk() {
     if (raw && raw.trim().length > 0) {
       const data = JSON.parse(raw);
       if (Array.isArray(data.users) && data.users.length > 0) {
-        // User Requirement: NEVER remove data used for testing or registered by the user!
+        // User Requirement: Keep only authentic registered users (Google accounts & genuine registrations).
+        // NEVER inject or keep dummy demo test users (hosp-1, hosp-2, hosp-pending-1, or demo emails).
         const userMap = new Map<string, User>();
         // Add default admin first
         userMap.set(defaultAdminUser.email.toLowerCase(), defaultAdminUser);
-        userMap.set(defaultAdminUser.id, defaultAdminUser);
 
         // Add all loaded users from storage
         data.users.forEach((u: User) => {
-          if (u.id) userMap.set(u.id, u);
-          if (u.email) userMap.set(u.email.toLowerCase(), u);
+          if (!u) return;
+          if (['hosp-1', 'hosp-2', 'hosp-pending-1', 'usr-pat-1792230649743'].includes(u.id)) return;
+          if (['management@metrogeneral.org', 'admin@apexcare.org', 'admin@stjudetrauma.org', 'testpatient1@gmail.com'].includes(u.email)) return;
+          const email = (u.email || '').toLowerCase().trim();
+          if (email) {
+            userMap.set(email, u);
+          } else if (u.id) {
+            userMap.set(u.id, u);
+          }
         });
 
-        users = Array.from(new Set(userMap.values()));
+        users = Array.from(userMap.values());
       }
       if (Array.isArray(data.appointments)) appointments = data.appointments;
       if (Array.isArray(data.prescriptions)) prescriptions = data.prescriptions;
@@ -503,44 +433,21 @@ function loadStorageFromDisk() {
         }
       });
 
-      // Ensure at least demo hospitals exist so newly registering doctors can pick a hospital
-      const existingHospitals = users.filter((u) => u.role === 'hospital');
-      if (existingHospitals.length === 0) {
-        const demo = getDemoSeedData();
-        demo.users.filter(u => u.role === 'hospital').forEach(h => {
-          if (!users.some(existing => existing.id === h.id || existing.email.toLowerCase() === h.email.toLowerCase())) {
-            users.push(h);
-          }
-        });
-      }
-
-      // Hydrate hospital availableLabTests if missing
-      users.forEach((u) => {
-        if (u.role === 'hospital' && u.hospitalProfile) {
-          if (!u.hospitalProfile.availableLabTests || u.hospitalProfile.availableLabTests.length === 0) {
-            u.hospitalProfile.availableLabTests = [...DEFAULT_HOSPITAL_LAB_TESTS];
-          }
-        }
-      });
-
       console.log(`[Storage] Loaded ${users.length} users (${users.filter(u => u.role === 'hospital').length} hospitals, ${users.filter(u => u.role === 'doctor').length} doctors, ${users.filter(u => u.role === 'patient').length} patients) from disk.`);
-      // Immediately commit loaded state to ensure backup and disk synchronization
-      saveStorageToDisk();
     } else {
-      // If storage file does not exist yet, seed initial demo hospitals and save immediately
-      const demo = getDemoSeedData();
-      users = [defaultAdminUser, ...demo.users];
+      // Storage file does not exist yet: initialize with Master Admin only (No dummy test users)
+      users = [defaultAdminUser];
       saveStorageToDisk();
     }
   } catch (err) {
     console.warn('[Storage] Error loading storage:', err);
-    // Attempt fallback to backup file if available
+    // Fallback to backup file if primary read fails
     try {
       if (fs.existsSync(STORAGE_BACKUP_FILE)) {
         const backupRaw = fs.readFileSync(STORAGE_BACKUP_FILE, 'utf-8');
         const backupData = JSON.parse(backupRaw);
         if (Array.isArray(backupData.users) && backupData.users.length > 0) {
-          users = backupData.users;
+          users = backupData.users.filter((u: User) => !['hosp-1', 'hosp-2', 'hosp-pending-1', 'usr-pat-1792230649743'].includes(u.id) && !['management@metrogeneral.org', 'admin@apexcare.org', 'admin@stjudetrauma.org', 'testpatient1@gmail.com'].includes(u.email));
           console.log(`[Storage] Restored ${users.length} users from backup file.`);
         }
       }
@@ -557,25 +464,8 @@ function saveStorageToDisk() {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    // Safety Guard: Merge disk users with in-memory users so no registered or test user is EVER deleted or dropped!
-    if (fs.existsSync(STORAGE_FILE)) {
-      try {
-        const existingRaw = fs.readFileSync(STORAGE_FILE, 'utf-8');
-        const existingData = JSON.parse(existingRaw);
-        if (Array.isArray(existingData.users)) {
-          const userMap = new Map<string, User>();
-          existingData.users.forEach((u: User) => {
-            const key = (u.id || u.email || '').toLowerCase().trim();
-            if (key) userMap.set(key, u);
-          });
-          users.forEach((u: User) => {
-            const key = (u.id || u.email || '').toLowerCase().trim();
-            if (key) userMap.set(key, u);
-          });
-          users = Array.from(userMap.values());
-        }
-      } catch {}
-    }
+    // Filter out any dummy demo hospitals and ensure users array has only authentic users
+    users = users.filter((u) => u && !['hosp-1', 'hosp-2', 'hosp-pending-1', 'usr-pat-1792230649743'].includes(u.id) && !['management@metrogeneral.org', 'admin@apexcare.org', 'admin@stjudetrauma.org', 'testpatient1@gmail.com'].includes(u.email));
 
     const data = {
       users,
@@ -596,9 +486,11 @@ function saveStorageToDisk() {
       lastSaved: new Date().toISOString()
     };
     const jsonStr = JSON.stringify(data, null, 2);
-    // Write primary storage file
-    fs.writeFileSync(STORAGE_FILE, jsonStr, 'utf-8');
-    // Also maintain redundant backup file
+    // Write primary storage file atomically using temp file to eliminate corruption risk
+    const tmpFile = `${STORAGE_FILE}.tmp`;
+    fs.writeFileSync(tmpFile, jsonStr, 'utf-8');
+    fs.renameSync(tmpFile, STORAGE_FILE);
+    // Write redundant backup file
     fs.writeFileSync(STORAGE_BACKUP_FILE, jsonStr, 'utf-8');
   } catch (err) {
     console.warn('[Storage] Error saving storage:', err);
@@ -3590,7 +3482,7 @@ app.post('/api/hospitals/:hospitalId/onboard-doctor', (req, res) => {
       passingYear: passingYear || '2018',
       qualifications: `${ugDegree || 'MBBS'}${pgDegree ? ', ' + pgDegree : ''}`,
       yearsOfExperience: Number(yearsOfExperience) || 5,
-      consultationFee: Number(consultationFee) || 50,
+      consultationFee: Number(consultationFee) || 500,
       approvalStatus: 'approved', // Directly authorized by hospital
       maxLeaveAllowance: 5,
       leaveDates: [],
@@ -4007,7 +3899,7 @@ Appointment Details:
 • Time Slot: ${timeSlot}
 • Doctor: Dr. ${order.doctorName} (${doctor?.doctorProfile?.specialization || 'Consultant'})
 • Hospital: ${order.hospitalName}
-• Consultation Fee: $0.00 / ₹0.00 (100% FREE Follow-Up - Diagnostic Policy)
+• Consultation Fee: ₹0.00 (100% FREE Follow-Up - Diagnostic Policy)
 
 No consultation charges apply for this review session.`,
     });
@@ -4015,7 +3907,7 @@ No consultation charges apply for this review session.`,
 
   return res.json({
     success: true,
-    message: `Free follow-up appointment successfully booked for ${order.patientName} with Dr. ${order.doctorName}. Fee is 100% waived ($0).`,
+    message: `Free follow-up appointment successfully booked for ${order.patientName} with Dr. ${order.doctorName}. Fee is 100% waived (₹0).`,
     appointment: freeAppointment,
     order,
   });
@@ -5842,11 +5734,11 @@ Clinical Triage & Emergency Circuit Breaker Rules:
    - Set "emergencyWarning": "🚨 CRITICAL MEDICAL ALERT: Your reported symptoms indicate a potential medical emergency! Do NOT wait for a routine appointment. Trigger immediate Emergency SOS or reach the nearest emergency trauma casualty immediately."
    - Set "emergencyAction": "TRIGGER_SOS_NOW"
 3. PRIMARY CARE FIRST & COST-SAVING TRIAGE RULE (CRITICAL USER REQUIREMENT):
-   In real healthcare, patients with common symptoms such as headache (mild, moderate, or severe tension/migraine headaches), fever, common cold, fatigue, body ache, mild dizziness, or abdominal discomfort should NOT immediately be routed to an expensive super-specialist (e.g. Neurology, Gastroenterology, Neurosurgeon) where fees are high ($80-$150+).
-   Instead, ALWAYS recommend a "General & Internal Medicine (Family Physician / General Doctor)" as the affordable, accessible first-line physician ($15-$30) to perform clinical evaluation, assess blood pressure/vitals, prescribe initial relief, and order preliminary tests.
+   In real healthcare, patients with common symptoms such as headache (mild, moderate, or severe tension/migraine headaches), fever, common cold, fatigue, body ache, mild dizziness, or abdominal discomfort should NOT immediately be routed to an expensive super-specialist (e.g. Neurology, Gastroenterology, Neurosurgeon) where fees are high (₹1,500 - ₹3,000+).
+   Instead, ALWAYS recommend a "General & Internal Medicine (Family Physician / General Doctor)" as the affordable, accessible first-line physician (₹300 - ₹600) to perform clinical evaluation, assess blood pressure/vitals, prescribe initial relief, and order preliminary tests.
    The General Physician evaluates the patient first and can refer to a specialized doctor (e.g. Neurology) only if red flags or complex secondary issues appear.
 4. If "isGeneralPhysicianFirst" is true, provide:
-   - "costSavingAdvice": "💡 Cost-Saving Healthcare Guidance: For headaches and initial symptoms, visiting a General Physician first is significantly more affordable ($15–$30) compared to expensive super-specialist fees ($80–$150+ for Neurology). The General Physician will evaluate your vitals and reflexes first, and refer you to Neurology only if specialized neuro-imaging (MRI/CT) or advanced treatment is required."
+   - "costSavingAdvice": "💡 Cost-Saving Healthcare Guidance: For headaches and initial symptoms, visiting a General Physician first is significantly more affordable (₹300–₹600) compared to expensive super-specialist fees (₹1,500–₹3,000+ for Neurology). The General Physician will evaluate your vitals and reflexes first, and refer you to Neurology only if specialized neuro-imaging (MRI/CT) or advanced treatment is required."
    - "alternativeSpecialist": "Neurology & Stroke Care (Higher-fee Specialist Referral Option)"
 5. Return strictly JSON format:
 {
@@ -5916,7 +5808,7 @@ Clinical Triage & Emergency Circuit Breaker Rules:
       patientLanguageExplanation: isCritical
         ? 'తీవ్రమైన అత్యవసర లక్షణాలు గుర్తించబడ్డాయి. తక్షణ ఎమర్జెన్సీ సహాయం తీసుకోండి / गंभीर आपातकालीन लक्षण मिले हैं, तुरंत इमरजेंसी सहायता लें।'
         : isHeadacheOrGeneral
-        ? 'మీ తలనొప్పికి మొదట జనరల్ ఫిజీషియన్ (సాధారణ వైద్యుడు) ని సంప్రదించడం ఖర్చు పరంగా అనుకూలం ($25). అవసరమైతే న్యూరాలజిస్ట్ ని సూచిస్తారు / सिरदर्द के लिए पहले जनरल फिजिशियन से परामर्श करना किफायती ($25) है। आवश्यकता पड़ने पर न्यूरोलॉजिस्ट के पास भेजा जाएगा।'
+        ? 'మీ తలనొప్పికి మొదట జనరల్ ఫిజీషియన్ (సాధారణ వైద్యుడు) ని సంప్రదించడం ఖర్చు పరంగా అనుకూలం (₹300 - ₹500). అవసరమైతే న్యూరాలజిస్ట్ ని సూచిస్తారు / सिरदर्द के लिए पहले जनरल फिजिशियन से परामर्श करना किफायती (₹300 - ₹500) है। आवश्यकता पड़ने पर न्यूरोलॉजिस्ट के पास भेजा जाएगा।'
         : 'మీ ఆరోగ్య పరిస్థితికి అనుగుణంగా తగిన వైద్యుడిని సంప్రదించాల్సిందిగా సూచిస్తున్నాము / आपके स्वास्थ्य के अनुसार योग्य डॉक्टर से परामर्श की सलाह दी जाती है।',
       recommendedSpecialization: isCritical
         ? 'Emergency & Trauma Medicine'
@@ -5927,10 +5819,10 @@ Clinical Triage & Emergency Circuit Breaker Rules:
       isEmergency: isCritical,
       isGeneralPhysicianFirst: isHeadacheOrGeneral,
       costSavingAdvice: isHeadacheOrGeneral
-        ? '💡 Cost-Saving Healthcare Guidance: For headaches and preliminary symptoms, starting with a General Physician is significantly more affordable ($25) compared to expensive super-specialist fees ($85+ for Neurology). The General Physician will evaluate your vitals and reflexes first, and escalate to a Neurologist only if specialized neuro-imaging (MRI/CT) or advanced treatment is required.'
+        ? '💡 Cost-Saving Healthcare Guidance: For headaches and preliminary symptoms, starting with a General Physician is significantly more affordable (₹300 - ₹500) compared to expensive super-specialist fees (₹1,500+ for Neurology). The General Physician will evaluate your vitals and reflexes first, and escalate to a Neurologist only if specialized neuro-imaging (MRI/CT) or advanced treatment is required.'
         : null,
       alternativeSpecialist: isHeadacheOrGeneral && neuroDoc
-        ? `${neuroDoc.name} (${neuroDoc.specialization} - $${neuroDoc.fee || 85} Specialist Option)`
+        ? `${neuroDoc.name} (${neuroDoc.specialization} - ₹${neuroDoc.fee || 1200} Specialist Option)`
         : null,
       emergencyWarning: isCritical
         ? '🚨 CRITICAL MEDICAL ALERT: Symptoms indicate an acute emergency. Trigger Emergency SOS immediately.'

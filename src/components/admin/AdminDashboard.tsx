@@ -32,7 +32,7 @@ import {
   FileText,
   Calendar,
   Activity,
-  DollarSign,
+  IndianRupee,
   CalendarOff,
   CreditCard,
   Receipt,
@@ -58,6 +58,7 @@ import {
   clearFirestoreDatabase,
   fetchUsersFromFirestore,
 } from '../../services/firestoreSync';
+import { RegistrationPageView } from '../registration/RegistrationPageView';
 
 interface AdminDashboardProps {
   onNavigateToDatabase?: () => void;
@@ -1252,7 +1253,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px] uppercase font-bold">Consultation Fee</span>
-                        <span className="text-emerald-700 font-bold">${doc.doctorProfile?.consultationFee ?? 50}</span>
+                        <span className="text-emerald-700 font-bold">₹{doc.doctorProfile?.consultationFee ?? 500}</span>
                       </div>
                     </div>
 
@@ -1599,7 +1600,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
                         {item.name}
                       </h4>
                       <span className="text-sm font-black text-purple-700 shrink-0">
-                        ${item.price}
+                        ₹{item.price.toLocaleString()}
                       </span>
                     </div>
 
@@ -1745,7 +1746,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
               <div className="p-3.5 bg-emerald-100 text-emerald-700 rounded-xl">
-                <DollarSign className="w-6 h-6" />
+                <IndianRupee className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Received Revenue</p>
@@ -2158,7 +2159,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
                           <span className="mr-2 text-rose-700 font-bold">{row.triggerReason}</span>
                         )}
                         {row.category && (
-                          <span className="mr-2">{row.category} (${row.price})</span>
+                          <span className="mr-2">{row.category} (₹{row.price})</span>
                         )}
                       </td>
 
@@ -2308,7 +2309,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
 
               <div className="grid grid-cols-3 gap-2.5">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Price ($)</label>
+                  <label className="block text-slate-700 font-semibold mb-1">Price (₹ INR)</label>
                   <input
                     type="number"
                     value={newItemPrice}
@@ -2439,7 +2440,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
                   <p>Hospital: <strong>{selectedUserDetail.doctorProfile.hospitalName}</strong></p>
                   <p>Specialization: <strong>{selectedUserDetail.doctorProfile.specialization}</strong> ({selectedUserDetail.doctorProfile.yearsOfExperience} yrs exp)</p>
                   <p>Degrees: {selectedUserDetail.doctorProfile.qualifications}</p>
-                  <p>Consultation Fee: ${selectedUserDetail.doctorProfile.consultationFee}</p>
+                  <p>Consultation Fee: ₹{selectedUserDetail.doctorProfile.consultationFee}</p>
                   <p>Leave Allowance: {selectedUserDetail.doctorProfile.maxLeaveAllowance ?? 5} working days</p>
                   <p>Hospital Approval: <strong className="uppercase">{selectedUserDetail.doctorProfile.approvalStatus}</strong></p>
                 </div>
@@ -3322,6 +3323,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
               </button>
             </div>
 
+            {/* Plain English Explainer Card (User Clarification) */}
+            <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="p-1 bg-amber-200 text-amber-900 rounded-lg font-bold text-xs">💡 What is this?</span>
+                <span className="text-xs font-bold text-amber-950">Simple Explanation of Custom Domains</span>
+              </div>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                Right now, this portal runs on a cloud web address. If your hospital or organization owns an official website address (for example: <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">www.yourhospital.com</code> or <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">care.cityhospital.org</code>), this tool helps your IT administrator connect it so patients and doctors visit your own branded website name.
+              </p>
+              <p className="text-[11px] text-amber-800 font-semibold">
+                ⭐ <strong>Note for Testing:</strong> This is <strong>100% OPTIONAL</strong>! You do not need to buy or connect any domain to test or use this entire hospital system.
+              </p>
+            </div>
+
             {/* Custom Domain Input Bar */}
             <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3734,7 +3749,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
                       Lic: {selectedDoctorAudit.doctor.doctorProfile?.medicalLicenseNumber}
                     </span>
                     <span className="text-teal-800 font-semibold">
-                      Fee: ${selectedDoctorAudit.doctor.doctorProfile?.consultationFee ?? 50} / consult
+                      Fee: ₹{selectedDoctorAudit.doctor.doctorProfile?.consultationFee ?? 500} / consult
                     </span>
                     <span className="text-amber-800 font-semibold">
                       Leave Allowance: {selectedDoctorAudit.doctor.doctorProfile?.maxLeaveAllowance ?? 5} days/month
@@ -4069,474 +4084,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToData
         </div>
       )}
 
-      {/* ======================= REGISTER NEW HOSPITAL MODAL ======================= */}
+      {/* ======================= REGISTER NEW HOSPITAL VIEW (Exact Same Page As Standalone Hospital Registration) ======================= */}
       {isAddHospitalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 my-6 max-h-[90vh] overflow-y-auto">
-            
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                    Register & Authorize New Hospital Facility
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Administrator authorization credentials & facility profile
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddHospitalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateHospitalSubmit} className="space-y-4 mt-4 text-xs">
-              
-              {/* Basic Hospital Identity */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-slate-700 font-semibold mb-1">Hospital Legal Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={hospName}
-                    onChange={(e) => setHospName(e.target.value)}
-                    placeholder="e.g. Metro Heart Institute & Multi-Specialty Hospital"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Hospital Type / Category *</label>
-                  <select
-                    value={hospCategory}
-                    onChange={(e) => setHospCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs font-semibold"
-                  >
-                    <option value="Private Super-Specialty">Private Super-Specialty</option>
-                    <option value="Government / Public">Government / Public</option>
-                    <option value="Trust / Non-Profit">Trust / Non-Profit</option>
-                    <option value="Multi-Specialty Clinic">Multi-Specialty Clinic</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Management Email & Representative */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Official Management Email *</label>
-                  <input
-                    type="email"
-                    required
-                    value={hospEmail}
-                    onChange={(e) => setHospEmail(e.target.value)}
-                    placeholder="management@hospital.org"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Medical Director / Admin Rep *</label>
-                  <input
-                    type="text"
-                    required
-                    value={hospAdminRep}
-                    onChange={(e) => setHospAdminRep(e.target.value)}
-                    placeholder="e.g. Dr. K. Rao (Medical Director)"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              {/* License & Accreditation */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Govt License Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={hospLicense}
-                    onChange={(e) => setHospLicense(e.target.value)}
-                    placeholder="e.g. HOSP-LIC-2026-9104"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Accreditation *</label>
-                  <input
-                    type="text"
-                    value={hospAccreditation}
-                    onChange={(e) => setHospAccreditation(e.target.value)}
-                    placeholder="NABH, JCI Gold, State Tier-1"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Official Phone *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={hospPhone}
-                    onChange={(e) => setHospPhone(e.target.value)}
-                    placeholder="+91 (040) 2345-6789"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              {/* Emergency Hotline & Bed Capacity */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    24/7 Emergency ER Hotline *
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={hospHotline}
-                    onChange={(e) => setHospHotline(e.target.value)}
-                    placeholder="+91 1800-425-9111"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-rose-700 font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Total Bed Capacity</label>
-                  <input
-                    type="number"
-                    value={hospBeds}
-                    onChange={(e) => setHospBeds(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">ICU Critical Care Beds</label>
-                  <input
-                    type="number"
-                    value={hospIcuBeds}
-                    onChange={(e) => setHospIcuBeds(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* India Geographical Hierarchy (India Only Requirement) */}
-              <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-700" />
-                    Hospital Facility Location (India Clinical Network)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsMapModalOpen(true)}
-                      className="px-3 py-1 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold rounded-lg text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Select on Google Maps (Satellite)</span>
-                    </button>
-                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">
-                      India Only
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Country</label>
-                    <select
-                      value={hospCountry}
-                      onChange={(e) => setHospCountry(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800"
-                    >
-                      <option value="India">India (Republic of India)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">State *</label>
-                    <select
-                      value={hospState}
-                      onChange={(e) => {
-                        const newState = e.target.value;
-                        setHospState(newState);
-                        const dists = INDIA_DISTRICTS[newState];
-                        if (dists && dists.length > 0) setHospDistrict(dists[0]);
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800"
-                    >
-                      {INDIA_STATES.map((st) => (
-                        <option key={st} value={st}>{st}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">District *</label>
-                    {INDIA_DISTRICTS[hospState] && INDIA_DISTRICTS[hospState].length > 0 ? (
-                      <select
-                        value={hospDistrict}
-                        onChange={(e) => setHospDistrict(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800"
-                      >
-                        {INDIA_DISTRICTS[hospState].map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={hospDistrict}
-                        onChange={(e) => setHospDistrict(e.target.value)}
-                        placeholder="District"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">City / Municipality *</label>
-                    <input
-                      type="text"
-                      required
-                      value={hospCity}
-                      onChange={(e) => setHospCity(e.target.value)}
-                      placeholder="e.g. Hyderabad"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
-                      <span>PIN Code (Postal Index Number) *</span>
-                      <span className="text-[10px] text-emerald-700">Auto-Fetch Enabled</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        required
-                        maxLength={6}
-                        value={hospPincode}
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/\D/g, '');
-                          setHospPincode(v);
-                          if (v.length === 6) handleAdminHospPincodeLookup(v);
-                        }}
-                        placeholder="6-digit PIN e.g. 500001"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-emerald-950 font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleAdminHospPincodeLookup(hospPincode)}
-                        disabled={hospPincodeFetching || hospPincode.length !== 6}
-                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer"
-                      >
-                        {hospPincodeFetching ? 'Fetching...' : 'Fetch'}
-                      </button>
-                    </div>
-                    {hospPincodeFetchStatus && (
-                      <p className="text-[10px] mt-1 text-emerald-800 font-medium">
-                        {hospPincodeFetchStatus}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Street Address / Landmark *</label>
-                  <input
-                    type="text"
-                    required
-                    value={hospAddress}
-                    onChange={(e) => setHospAddress(e.target.value)}
-                    placeholder="Plot 42, Road No 1, Jubilee Hills"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              {/* Mandatory Documents & Hospital Logo (User Requirement) */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                <span className="text-[11px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-purple-700" />
-                  Mandatory Legal Documents & Official Hospital Logo *
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* License Document */}
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
-                    <label className="block text-[11px] font-bold text-slate-700">
-                      1. Hospital License *
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          setHospLicenseFile({
-                            name: file.name,
-                            type: 'hospital_license',
-                            dataUrl: reader.result as string,
-                            size: `${(file.size / 1024).toFixed(1)} KB`,
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                      className="text-[10px] text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-purple-50 file:text-purple-700 cursor-pointer"
-                    />
-                    {hospLicenseFile && (
-                      <span className="text-[10px] text-emerald-700 font-bold block truncate">
-                        ✓ {hospLicenseFile.name}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Accreditation Certificate */}
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
-                    <label className="block text-[11px] font-bold text-slate-700">
-                      2. Accreditation Cert *
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          setHospAccreditationFile({
-                            name: file.name,
-                            type: 'accreditation',
-                            dataUrl: reader.result as string,
-                            size: `${(file.size / 1024).toFixed(1)} KB`,
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                      className="text-[10px] text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-purple-50 file:text-purple-700 cursor-pointer"
-                    />
-                    {hospAccreditationFile && (
-                      <span className="text-[10px] text-emerald-700 font-bold block truncate">
-                        ✓ {hospAccreditationFile.name}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Official Hospital Logo with Image Preview */}
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
-                    <label className="block text-[11px] font-bold text-slate-700">
-                      3. Official Hospital Logo *
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          setHospLogoFile({
-                            name: file.name,
-                            type: 'logo',
-                            dataUrl: reader.result as string,
-                            size: `${(file.size / 1024).toFixed(1)} KB`,
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                      className="text-[10px] text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-amber-50 file:text-amber-700 cursor-pointer"
-                    />
-                    {hospLogoFile ? (
-                      <div className="flex items-center gap-2 pt-1">
-                        <img
-                          src={hospLogoFile.dataUrl}
-                          alt="Logo Preview"
-                          className="w-8 h-8 rounded-lg object-cover border border-amber-300 shadow-xs"
-                        />
-                        <span className="text-[10px] text-emerald-700 font-bold truncate">
-                          ✓ {hospLogoFile.name}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-slate-400">
-                        Displays beside hospital name across all portals
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Medical Departments / Specializations */}
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1.5">
-                  Authorized Clinical Departments & Specialties ({hospSelectedDepts.length} selected)
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-                  {MEDICAL_SPECIALIZATIONS.map((dept) => {
-                    const isChecked = hospSelectedDepts.includes(dept);
-                    return (
-                      <label
-                        key={dept}
-                        className={`flex items-center gap-2 p-1.5 rounded-lg text-[11px] cursor-pointer transition-colors ${
-                          isChecked ? 'bg-emerald-100/70 text-emerald-950 font-bold' : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setHospSelectedDepts([...hospSelectedDepts, dept]);
-                            } else {
-                              setHospSelectedDepts(hospSelectedDepts.filter((d) => d !== dept));
-                            }
-                          }}
-                          className="rounded text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span className="truncate">{dept}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAddHospitalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{loading ? 'Registering...' : 'Authorize & Register Hospital'}</span>
-                </button>
-              </div>
-
-            </form>
-
+        <div className="fixed inset-0 z-50 bg-slate-50/95 backdrop-blur-md overflow-y-auto overscroll-contain animate-in fade-in">
+          <div className="max-w-6xl mx-auto px-4 py-8">
+            <RegistrationPageView
+              defaultRole="hospital"
+              lockRole={true}
+              isEmbedded={true}
+              embeddedTitle="Register & Authorize New Hospital Facility"
+              onCancel={() => setIsAddHospitalOpen(false)}
+              onRegistrationComplete={(createdHospital) => {
+                setIsAddHospitalOpen(false);
+                setActionFeedback(`✅ Hospital "${createdHospital?.name || "New Facility"}" registered and authorized! Official credentials email dispatched.`);
+                setTimeout(() => setActionFeedback(null), 6000);
+                loadData();
+              }}
+            />
           </div>
         </div>
       )}
