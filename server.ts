@@ -1161,7 +1161,14 @@ app.post('/api/auth/register', (req, res) => {
 
     newUser.patientProfile = {
       govtIdType: patientData?.govtIdType || 'Aadhar Card',
-      govtIdNumber: patientData?.govtIdNumber || '',
+      govtIdNumber: patientData?.govtIdNumber || patientData?.aadharNumber || '',
+      aadharNumber: patientData?.aadharNumber || patientData?.govtIdNumber || '',
+      aadharDocumentUrl: patientData?.aadharDocumentUrl,
+      aadharDocumentName: patientData?.aadharDocumentName,
+      additionalDocType: patientData?.additionalDocType,
+      additionalDocNumber: patientData?.additionalDocNumber,
+      additionalDocUrl: patientData?.additionalDocUrl,
+      additionalDocName: patientData?.additionalDocName,
       dateOfBirth: patientData?.dateOfBirth || '1990-01-01',
       gender: patientData?.gender || 'other',
       bloodGroup: patientData?.bloodGroup || 'O+',
@@ -1172,9 +1179,9 @@ app.post('/api/auth/register', (req, res) => {
       city: patientData?.city || '',
       state: patientData?.state || '',
       pincode: patientData?.pincode || '',
-      existingConditions: patientData?.existingConditions || [],
-      allergies: patientData?.allergies || [],
-      currentMedications: patientData?.currentMedications || [],
+      existingConditions: Array.isArray(patientData?.existingConditions) ? patientData.existingConditions : [],
+      allergies: Array.isArray(patientData?.allergies) ? patientData.allergies : [],
+      currentMedications: Array.isArray(patientData?.currentMedications) ? patientData.currentMedications : [],
       emergencyContact: {
         name: firstContact.name,
         relationship: firstContact.relationship,

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
-import { signInWithGooglePopup } from '../../services/firebaseAuth';
+import { signInWithGooglePopup, firebaseConfig, getFirebaseAuthorizedDomainsConsoleUrl } from '../../services/firebaseAuth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -49,6 +49,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Feedback & Loading
   const [error, setError] = useState<string | null>(null);
+  const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState<{
+    domain: string;
+    consoleUrl: string;
+  } | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -82,6 +87,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setUnauthorizedDomainInfo(null);
     setInfoMessage(null);
     setLoading(true);
 
@@ -155,9 +161,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Google Sign-In: triggers official Google popup
+  // Google Sign-In: triggers official Google Chrome popup (accounts.google.com/v3/signin/accountchooser)
   const handleGoogleSignInClick = async () => {
     setError(null);
+    setUnauthorizedDomainInfo(null);
     setLoading(true);
     try {
       const cred = await signInWithGooglePopup();
@@ -168,10 +175,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         // Check if account already exists
         const check = await api.checkEmail(googleEmail);
         if (!check.exists || !check.user) {
-          // USER REQUIREMENT:
-          // If I sign in with an unregistered account, it should automatically say that
-          // your account is not signed up, so please register pop-up and it should go to the register page.
-          // Without giving any pop-up, it should not directly go to the register page.
           setUnregisteredPopup({
             isOpen: true,
             email: googleEmail,
@@ -218,6 +221,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (popupErr: any) {
       console.warn('Google sign-in popup notice:', popupErr.message);
+      if (
+        popupErr?.code === 'auth/unauthorized-domain' ||
+        popupErr?.message?.includes('unauthorized-domain') ||
+        popupErr?.unauthorizedDomain
+      ) {
+        const detectedHost =
+          popupErr.unauthorizedDomain ||
+          (typeof window !== 'undefined' && window.location.hostname) ||
+          'shm-systems.ai.studio';
+        setUnauthorizedDomainInfo({
+          domain: detectedHost,
+          consoleUrl:
+            popupErr.consoleUrl ||
+            getFirebaseAuthorizedDomainsConsoleUrl(),
+        });
+        return;
+      }
       if (!popupErr.message?.includes('closed-by-user')) {
         setError(popupErr.message || 'Google Sign-In was cancelled or encountered an issue. Please try again.');
       }
@@ -280,7 +300,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Body Content */}
           <div className="p-6">
-            
+            {unauthorizedDomainInfo && (
+              <div className="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-slate-800 space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-extrabold text-amber-950">
+                      Add "{unauthorizedDomainInfo.domain}" to Firebase Authorized Domains
+                    </p>
+                    <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                      To open the official Google Account Chooser popup (<code className="font-mono">accounts.google.com</code>) on your published domain, add this domain in your Firebase Console under <strong>Authentication &rarr; Settings &rarr; Authorized domains</strong>:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={unauthorizedDomainInfo.domain}
+                    className="flex-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg font-mono font-bold text-slate-900 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(unauthorizedDomainInfo.domain);
+                      setCopiedDomain(true);
+                      setTimeout(() => setCopiedDomain(false), 2500);
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs cursor-pointer shrink-0"
+                  >
+                    {copiedDomain ? '✓ Copied!' : 'Copy Domain'}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <a
+                    href={unauthorizedDomainInfo.consoleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-extrabold text-teal-800 hover:text-teal-950 underline"
+                  >
+                    Open Firebase Console &rarr; Authentication &rarr; Settings &rarr;
+                  </a>
+                  <span className="text-[10px] text-amber-800 font-mono">
+                    Project: {firebaseConfig.projectId}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />

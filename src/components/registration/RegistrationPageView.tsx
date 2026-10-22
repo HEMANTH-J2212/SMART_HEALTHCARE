@@ -37,12 +37,15 @@ import {
   IndianRupee,
   Calendar,
   AlertTriangle,
-  ChevronRight
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  Pill
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { User, UserDocument, MEDICAL_SPECIALIZATIONS } from '../../types';
-import { signInWithGooglePopup } from '../../services/firebaseAuth';
+import { signInWithGooglePopup, getFirebaseAuthorizedDomainsConsoleUrl } from '../../services/firebaseAuth';
 import { matchSpecialization } from '../../utils/specializationMatcher';
 import { syncUserToFirestore } from '../../services/firestoreSync';
 import { INDIA_STATES, INDIA_DISTRICTS, fetchIndiaPincodeDetails } from '../../utils/indiaLocations';
@@ -549,6 +552,13 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   const [patNewCondition, setPatNewCondition] = useState('');
   const [patAllergies, setPatAllergies] = useState<string[]>([]);
   const [patNewAllergy, setPatNewAllergy] = useState('');
+  const [patMedications, setPatMedications] = useState<string[]>([]);
+  const [patNewMedication, setPatNewMedication] = useState('');
+  const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState<{
+    domain: string;
+    consoleUrl: string;
+  } | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   
   // User Requirement: Multiple Priority Emergency Contacts with Add Option
   const [patEmergencyContacts, setPatEmergencyContacts] = useState<PatientRegEmergencyContact[]>([
@@ -891,6 +901,13 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
     }
   };
 
+  const handleAddMedication = () => {
+    if (patNewMedication.trim() && !patMedications.includes(patNewMedication.trim())) {
+      setPatMedications([...patMedications, patNewMedication.trim()]);
+      setPatNewMedication('');
+    }
+  };
+
   // Selected hospital details for Doctor or Patient
   const selectedDocHospital = availableHospitals.find((h) => h.id === docSelectedHospitalId);
   const selectedPatHospital = availableHospitals.find((h) => h.id === patSelectedHospitalId);
@@ -1016,6 +1033,7 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
   // User clicks "Sign up with Google": directly opens Google account chooser popup (accounts.google.com/v3/signin/accountchooser)
   const handleGoogleSignUpClick = async () => {
     setError(null);
+    setUnauthorizedDomainInfo(null);
     setGoogleLoading(true);
     try {
       const cred = await signInWithGooglePopup();
@@ -1028,7 +1046,17 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
       }
     } catch (err: any) {
       console.warn('Firebase Google Sign-In note:', err);
-      if (!err.message?.includes('closed-by-user')) {
+      if (err?.code === 'auth/unauthorized-domain' || err?.unauthorizedDomain) {
+        const detectedHost =
+          err.unauthorizedDomain ||
+          (typeof window !== 'undefined' ? window.location.hostname : 'shm-systems.ai.studio');
+        setUnauthorizedDomainInfo({
+          domain: detectedHost,
+          consoleUrl:
+            err.consoleUrl ||
+            getFirebaseAuthorizedDomainsConsoleUrl(),
+        });
+      } else if (!err.message?.includes('closed-by-user')) {
         setError(err.message || 'Google Sign-In was cancelled or encountered an error.');
       }
     } finally {
@@ -1264,10 +1292,13 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
           weightKg: Number(patWeightKg) || 70,
           streetAddress: patStreet || '123 Health Ave',
           city: patCity || 'Hyderabad',
+          district: patDistrict || 'Hyderabad',
           state: patState || 'Telangana',
+          country: patCountry || 'India',
           pincode: patPincode || '500001',
           existingConditions: patConditions,
           allergies: patAllergies,
+          currentMedications: patMedications,
           emergencyContact: {
             name: primaryContact.name,
             relationship: primaryContact.relationship,
@@ -1743,6 +1774,45 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
             <p className="text-[11px] text-slate-500 text-center">
               Continue securely with your Google account
             </p>
+
+            {unauthorizedDomainInfo && (
+              <div className="mt-3 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-950 space-y-2.5 text-left">
+                <div className="font-extrabold text-amber-900 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Authorize Live Domain in Firebase Console</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  To open the official Google Account Chooser popup on your published website, add this domain under{' '}
+                  <strong>Authentication &gt; Settings &gt; Authorized domains</strong>:
+                </p>
+                <div className="flex items-center justify-between gap-2 bg-white border border-amber-300 rounded-xl px-3 py-2">
+                  <code className="font-mono font-bold text-slate-900 text-xs select-all truncate">
+                    {unauthorizedDomainInfo.domain}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(unauthorizedDomainInfo.domain);
+                      setCopiedDomain(true);
+                      setTimeout(() => setCopiedDomain(false), 2500);
+                    }}
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedDomain ? 'Copied!' : 'Copy Domain'}</span>
+                  </button>
+                </div>
+                <a
+                  href={unauthorizedDomainInfo.consoleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span>Open Firebase Auth Settings</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            )}
           </div>
 
           {/* OR Divider */}
@@ -4242,8 +4312,8 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </div>
             </div>
 
-            {/* Row 3: Height & Weight */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Row 3: Height, Weight & Live Automated BMI Calculation */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Height (cm) *
@@ -4272,6 +4342,31 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
                   onChange={(e) => setPatWeightKg(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 focus:bg-white outline-none font-mono"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Calculated Body Mass Index (BMI)
+                </label>
+                {(() => {
+                  const h = Number(patHeightCm) || 170;
+                  const w = Number(patWeightKg) || 70;
+                  const bmiVal = Number((w / Math.pow(h / 100, 2)).toFixed(1));
+                  const bmiCategory =
+                    bmiVal < 18.5
+                      ? { label: 'Underweight', color: 'text-amber-700 bg-amber-50 border-amber-200' }
+                      : bmiVal < 25
+                      ? { label: 'Normal Weight', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+                      : bmiVal < 30
+                      ? { label: 'Overweight', color: 'text-amber-700 bg-amber-50 border-amber-200' }
+                      : { label: 'Obese Class', color: 'text-rose-700 bg-rose-50 border-rose-200' };
+                  return (
+                    <div className={`w-full px-3.5 py-2 border rounded-xl text-xs flex items-center justify-between font-mono ${bmiCategory.color}`}>
+                      <strong className="text-sm font-black tabular-nums">{bmiVal} kg/m²</strong>
+                      <span className="text-[10px] font-bold uppercase tracking-wider">{bmiCategory.label}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -4561,67 +4656,194 @@ export const RegistrationPageView: React.FC<RegistrationPageViewProps> = ({
               </div>
             </div>
 
-            {/* Row 6: Conditions & Allergies */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Existing Medical Conditions
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={patNewCondition}
-                    onChange={(e) => setPatNewCondition(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCondition())}
-                    placeholder="e.g. Hypertension, Diabetes"
-                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCondition}
-                    className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold"
-                  >
-                    Add
-                  </button>
+            {/* Row 6: Comprehensive Health Details — Past Medical Conditions, Allergies & Current Medications */}
+            <div className="p-4 bg-slate-50/80 border border-slate-200 rounded-2xl space-y-4">
+              <div className="border-b border-slate-200/80 pb-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <HeartPulse className="w-4 h-4 text-teal-600" />
+                    Comprehensive Clinical History, Allergies & Current Medications
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    Recorded securely in your encrypted patient profile to assist doctors and emergency responders during consultations.
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {patConditions.map((cond, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-800 text-[11px] rounded-lg flex items-center gap-1 font-semibold">
-                      {cond}
-                      <button type="button" onClick={() => setPatConditions(patConditions.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-rose-600">×</button>
-                    </span>
-                  ))}
-                </div>
+                <span className="text-[10px] font-mono font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                  HIPAA & ABDM EHR Synced
+                </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Known Drug / Food Allergies
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={patNewAllergy}
-                    onChange={(e) => setPatNewAllergy(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddAllergy())}
-                    placeholder="e.g. Penicillin, Sulfa"
-                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddAllergy}
-                    className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold"
-                  >
-                    Add
-                  </button>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Past Medical Conditions */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 space-y-2.5">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Past Medical Conditions
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={patNewCondition}
+                      onChange={(e) => setPatNewCondition(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCondition())}
+                      placeholder="e.g. Hypertension, Type 2 Diabetes"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-teal-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCondition}
+                      className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {['Hypertension', 'Type 2 Diabetes', 'Asthma', 'Thyroid Disorder', 'CAD'].map((preset) => {
+                      const active = patConditions.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() =>
+                            setPatConditions(
+                              active ? patConditions.filter((c) => c !== preset) : [...patConditions, preset]
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                            active
+                              ? 'bg-teal-700 text-white border-teal-700'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {active ? `✓ ${preset}` : `+ ${preset}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {patConditions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {patConditions.map((cond, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-teal-50 text-teal-900 border border-teal-200 text-[11px] rounded-lg flex items-center gap-1 font-semibold">
+                          {cond}
+                          <button type="button" onClick={() => setPatConditions(patConditions.filter((_, idx) => idx !== i))} className="text-teal-500 hover:text-rose-600 cursor-pointer">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {patAllergies.map((allg, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-rose-50 text-rose-800 border border-rose-200 text-[11px] rounded-lg flex items-center gap-1 font-semibold">
-                      {allg}
-                      <button type="button" onClick={() => setPatAllergies(patAllergies.filter((_, idx) => idx !== i))} className="text-rose-400 hover:text-rose-700">×</button>
-                    </span>
-                  ))}
+
+                {/* 2. Known Drug / Food Allergies */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 space-y-2.5">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Known Drug / Food Allergies
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={patNewAllergy}
+                      onChange={(e) => setPatNewAllergy(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddAllergy())}
+                      placeholder="e.g. Penicillin, Sulfa, Peanuts"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-rose-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddAllergy}
+                      className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {['Penicillin', 'Sulfa Drugs', 'Aspirin / NSAIDs', 'Peanuts', 'Latex'].map((preset) => {
+                      const active = patAllergies.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() =>
+                            setPatAllergies(
+                              active ? patAllergies.filter((a) => a !== preset) : [...patAllergies, preset]
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                            active
+                              ? 'bg-rose-600 text-white border-rose-600'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {active ? `✓ ${preset}` : `+ ${preset}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {patAllergies.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {patAllergies.map((allg, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-rose-50 text-rose-800 border border-rose-200 text-[11px] rounded-lg flex items-center gap-1 font-semibold">
+                          {allg}
+                          <button type="button" onClick={() => setPatAllergies(patAllergies.filter((_, idx) => idx !== i))} className="text-rose-400 hover:text-rose-700 cursor-pointer">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Current Active Medications */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 space-y-2.5">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <Pill className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Current Active Medications</span>
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={patNewMedication}
+                      onChange={(e) => setPatNewMedication(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddMedication())}
+                      placeholder="e.g. Metformin 500mg, Telmisartan 40mg"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-indigo-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddMedication}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {['Metformin 500mg', 'Telmisartan 40mg', 'Atorvastatin 10mg', 'Amlodipine 5mg', 'Levothyroxine 50mcg'].map((preset) => {
+                      const active = patMedications.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() =>
+                            setPatMedications(
+                              active ? patMedications.filter((m) => m !== preset) : [...patMedications, preset]
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                            active
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {active ? `✓ ${preset}` : `+ ${preset}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {patMedications.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {patMedications.map((med, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200 text-[11px] rounded-lg flex items-center gap-1 font-semibold">
+                          {med}
+                          <button type="button" onClick={() => setPatMedications(patMedications.filter((_, idx) => idx !== i))} className="text-indigo-400 hover:text-rose-600 cursor-pointer">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

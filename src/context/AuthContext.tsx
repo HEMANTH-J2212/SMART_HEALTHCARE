@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { api } from '../services/api';
+import {
+  signInWithGooglePopup,
+  isCurrentDomainAuthorized,
+  AUTHORIZED_PRODUCTION_DOMAINS,
+} from '../services/firebaseAuth';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  authorizedDomains: string[];
   sendOtp: (email: string) => Promise<{ success: boolean; message: string }>;
   verifyOtp: (email: string, otp: string) => Promise<boolean>;
   login: (email: string) => Promise<void>;
@@ -24,6 +30,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // Explicitly verify that the current production hostname (e.g., shm-systems.ai.studio)
+    // is included in the Firebase project's Authorized Domains list
+    const domainCheck = isCurrentDomainAuthorized();
+    if (!domainCheck.isAuthorized) {
+      console.warn(
+        `[Firebase Auth] Hostname "${domainCheck.hostname}" (${domainCheck.origin}) is not in the expected Authorized Domains list for project "${domainCheck.projectId}".`
+      );
+    }
+
     // Check if user session stored in localStorage
     const savedUserId = localStorage.getItem('smarthealth_user_id');
     const cachedUserStr = localStorage.getItem('smarthealth_user_data');
@@ -83,17 +98,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogle = async (customEmail?: string, customName?: string, customAvatarUrl?: string) => {
-    if (!customEmail || !customEmail.includes('@')) {
-      throw new Error('Please enter a valid Google email address.');
-    }
     setIsLoading(true);
     try {
-      const email = customEmail.trim().toLowerCase();
-      const name = customName?.trim() || email.split('@')[0];
-      const avatarUrl = customAvatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
-      
-      // Auto-create is true so genuine Google mail sign-ins succeed seamlessly without saying "Please register first"
-      const res = await api.googleLogin({ email, name, avatarUrl, autoCreateIfNotFound: true });
+      let resolvedEmail = customEmail?.trim().toLowerCase() || '';
+      let resolvedName = customName?.trim() || '';
+      let resolvedAvatar = customAvatarUrl || '';
+
+      // If called without pre-resolved Google credentials, invoke Firebase standard signInWithPopup
+      if (!resolvedEmail) {
+        const cred = await signInWithGooglePopup();
+        resolvedEmail = (cred.user.email || '').trim().toLowerCase();
+        resolvedName = cred.user.displayName || resolvedEmail.split('@')[0] || 'Google User';
+        resolvedAvatar = cred.user.photoURL || '';
+      }
+
+      if (!resolvedEmail || !resolvedEmail.includes('@')) {
+        throw new Error('Please select a valid Google account.');
+      }
+
+      const name = resolvedName || resolvedEmail.split('@')[0];
+      const avatarUrl = resolvedAvatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
+
+      // Auto-create is true so genuine Google mail sign-ins succeed seamlessly
+      const res = await api.googleLogin({ email: resolvedEmail, name, avatarUrl, autoCreateIfNotFound: true });
       setUser(res.user);
       localStorage.setItem('smarthealth_user_id', res.user.id);
       localStorage.setItem('smarthealth_user_data', JSON.stringify(res.user));
@@ -176,6 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         isLoading,
+        authorizedDomains: AUTHORIZED_PRODUCTION_DOMAINS,
         sendOtp,
         verifyOtp,
         login,

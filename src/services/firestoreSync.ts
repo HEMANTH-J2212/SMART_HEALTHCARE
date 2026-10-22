@@ -1,4 +1,4 @@
-import { db } from './firebaseAuth';
+import { db, firebaseConfig } from './firebaseAuth';
 import {
   collection,
   doc,
@@ -401,7 +401,7 @@ export async function testFirestoreConnection(): Promise<{
       connected: false,
       permissionGranted: false,
       error: 'Firestore client not initialized',
-      projectId: 'smart-health-management-6cc87',
+      projectId: firebaseConfig.projectId,
     };
   }
 
@@ -419,7 +419,7 @@ export async function testFirestoreConnection(): Promise<{
     return {
       connected: true,
       permissionGranted: true,
-      projectId: 'smart-health-management-6cc87',
+      projectId: firebaseConfig.projectId,
     };
   } catch (err: any) {
     const isPermissionDenied =
@@ -431,7 +431,7 @@ export async function testFirestoreConnection(): Promise<{
       error: isPermissionDenied
         ? 'Missing or insufficient permissions: Firestore security rules are locked (allow read, write: if false;)'
         : err.message,
-      projectId: 'smart-health-management-6cc87',
+      projectId: firebaseConfig.projectId,
     };
   }
 }
